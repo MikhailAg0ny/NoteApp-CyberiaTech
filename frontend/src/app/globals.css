@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* GitHub Dark theme colors */
+  --github-bg: #0d1117;
+  --github-bg-secondary: #161b22;
+  --github-border: #30363d;
+  --github-text-primary: #c9d1d9;
+  --github-text-secondary: #8b949e;
+  --github-accent: #1f6feb;
+  --github-accent-hover: #388bfd;
+  --github-danger: #f85149;
+  
+  /* Gradient animation colors */
+  --matte-black: #0a0c10;
+  --glossy-black: #121620;
+  
+  /* Original theme variables */
+  --background: #0d1117;
+  --foreground: #c9d1d9;
+}
+
+@keyframes matteToGlossy {
+  0%, 100% {
+    background-color: var(--matte-black);
+    box-shadow: none;
+  }
+  50% {
+    background-color: var(--glossy-black);
+    box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.03);
+  }
+}
+
+body {
+  animation: matteToGlossy 1s ease-in-out infinite;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Custom scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Adjust card backgrounds for glossy effect */
+.bg-\[\#161b22\] {
+  background-color: rgba(22, 27, 34, 0.95);
+  backdrop-filter: blur(3px);
+  transition: box-shadow 0.5s ease;
+}
+
+/* Add shine effect to cards when body is in glossy state */
+@keyframes cardGlossy {
+  0%, 100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.05);
+  }
+}
+
+.bg-\[\#161b22\]:not(.border-\[\#30363d\]) {
+  animation: cardGlossy 4s ease-in-out infinite;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
