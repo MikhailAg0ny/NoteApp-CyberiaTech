@@ -33,10 +33,10 @@ exports.getSingleNote = async (req, res) => {
 
 exports.createNote = async (req, res) => {
   try {
-  const userId = requireUser(req, res); if (!userId) return;
-    const { title, content, notebook_id } = req.body;
+    const userId = requireUser(req, res); if (!userId) return;
+    const { title, content, notebook_id, tags } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const note = await noteModel.createNote(userId, notebook_id, title, content);
+    const note = await noteModel.createNote(userId, notebook_id, title, content, Array.isArray(tags) ? tags : []);
     res.status(201).json(note);
   } catch (err) {
     console.error('POST /api/notes failed:', err);
@@ -46,11 +46,11 @@ exports.createNote = async (req, res) => {
 
 exports.updateNote = async (req, res) => {
   try {
-  const userId = requireUser(req, res); if (!userId) return;
+    const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
-    const { title, content, notebook_id } = req.body;
+    const { title, content, notebook_id, tags } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const updated = await noteModel.updateNote(userId, id, title, content, notebook_id);
+    const updated = await noteModel.updateNote(userId, id, title, content, notebook_id, Array.isArray(tags) ? tags : undefined);
     if (!updated) return res.status(404).json({ error: 'note not found' });
     res.json(updated);
   } catch (err) {

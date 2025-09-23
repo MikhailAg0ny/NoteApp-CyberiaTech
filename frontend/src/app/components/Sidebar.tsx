@@ -8,8 +8,14 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import { useEffect, useState } from 'react';
 
 export default function Sidebar() {
+  const [notebooks, setNotebooks] = useState<{id:number; name:string}[]>([]);
+  const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
   const handleCreateNoteClick = () => {
     const event = new CustomEvent('openCreateNoteModal');
     document.dispatchEvent(event);
@@ -18,6 +24,25 @@ export default function Sidebar() {
   const openSettings = () => {
     document.dispatchEvent(new CustomEvent('openSettingsModal'));
   };
+
+  const selectNotebook = (id: number | null) => {
+    setActiveNotebook(id);
+    document.dispatchEvent(new CustomEvent('filterNotebook', { detail: { notebookId: id } }));
+  };
+
+  useEffect(() => {
+    const fetchNotebooks = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/notebooks`, { headers: { 'Authorization': `Bearer ${token}` }});
+        if (res.ok) {
+          const data = await res.json();
+          setNotebooks(data);
+        }
+      } catch {}
+    };
+    fetchNotebooks();
+  }, [token, API_BASE]);
 
   return (
   <aside className="hidden md:flex md:flex-col w-64 bg-surface border-r border-default shadow-sm transition-colors select-none">
@@ -63,6 +88,24 @@ export default function Sidebar() {
             </button>
           ))}
         </nav>
+        {/* Notebooks Section */}
+        {notebooks.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-default/40">
+            <div className="px-3 text-[10px] uppercase tracking-wide font-semibold text-secondary mb-2">Notebooks</div>
+            <button
+              onClick={() => selectNotebook(null)}
+              className={`block w-full text-left px-3 py-1.5 text-sm rounded-md mb-1 transition-colors ${activeNotebook===null ? 'bg-[var(--github-accent)] text-white' : 'text-secondary hover:text-primary'}`}
+            >All</button>
+            {notebooks.map(nb => (
+              <button
+                key={nb.id}
+                onClick={() => selectNotebook(nb.id)}
+                className={`block w-full text-left px-3 py-1.5 text-sm rounded-md mb-1 truncate transition-colors ${activeNotebook===nb.id ? 'bg-[var(--github-accent)] text-white' : 'text-secondary hover:text-primary'}`}
+                title={nb.name}
+              >{nb.name}</button>
+            ))}
+          </div>
+        )}
       </nav>
 
       <div className="mt-auto p-4 border-t border-default/70 bg-[linear-gradient(var(--github-bg-secondary),var(--github-bg-secondary))]">

@@ -6,14 +6,19 @@ import { useEffect, useState } from 'react';
 interface CreateNoteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, content: string) => void;
+  onSave: (title: string, content: string, notebookId: number | null, tags: string[]) => void;
+  notebooks: { id: number; name: string }[];
+  defaultNotebookId?: number | null;
 }
 
-export default function CreateNoteModal({ isOpen, onClose, onSave }: CreateNoteModalProps) {
+export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, defaultNotebookId }: CreateNoteModalProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+  const [notebookId, setNotebookId] = useState<number | null>(defaultNotebookId ?? null);
+  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
 
   // Calculate word and character count when content changes
   useEffect(() => {
@@ -24,11 +29,34 @@ export default function CreateNoteModal({ isOpen, onClose, onSave }: CreateNoteM
 
   if (!isOpen) return null;
 
+  const addTag = (value: string) => {
+    const cleaned = value.trim();
+    if (!cleaned) return;
+    if (!tags.includes(cleaned) && tags.length < 50) {
+      setTags(prev => [...prev, cleaned]);
+    }
+  };
+
+  const handleTagKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(tagInput);
+      setTagInput('');
+    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+      setTags(prev => prev.slice(0, -1));
+    }
+  };
+
+  const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
+
   const handleSave = () => {
     if (title.trim()) {
-      onSave(title, content);
+      onSave(title, content, notebookId, tags);
       setTitle('');
       setContent('');
+      setNotebookId(defaultNotebookId ?? null);
+      setTags([]);
+      setTagInput('');
       onClose();
     }
   };
@@ -76,6 +104,42 @@ export default function CreateNoteModal({ isOpen, onClose, onSave }: CreateNoteM
               lineHeight: "28px"
             }}
           />
+
+          {/* Notebook selector */}
+          {notebooks.length > 0 && (
+            <div className="mt-4">
+              <label className="block text-xs font-semibold tracking-wide text-secondary mb-1">Notebook</label>
+              <select
+                value={notebookId ?? ''}
+                onChange={e => setNotebookId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                className="w-full bg-surface border border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/50"
+              >
+                <option value="">No notebook</option>
+                {notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Tags input */}
+          <div className="mt-4">
+            <label className="block text-xs font-semibold tracking-wide text-secondary mb-1">Tags (press Enter or comma)</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {tags.map(t => (
+                <span key={t} className="px-2 py-1 rounded-md bg-[var(--github-accent)]/15 text-[var(--github-accent)] text-xs flex items-center gap-1">
+                  {t}
+                  <button type="button" onClick={() => removeTag(t)} className="hover:text-[var(--github-danger)]" aria-label="Remove tag">×</button>
+                </span>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={handleTagKey}
+              placeholder={tags.length ? '' : 'Add tags'}
+              className="w-full bg-transparent outline-none border-b border-default focus:border-[var(--github-accent)] text-sm py-1"
+            />
+          </div>
           
           {/* Word count */}
           <div className="mt-2 text-sm text-secondary flex justify-between items-center">

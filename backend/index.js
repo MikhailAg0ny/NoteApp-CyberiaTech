@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const notesRouter = require('./routes/notes');
 const authRouter = require('./routes/auth');
+const notebooksRouter = require('./routes/notebooks');
+const tagsRouter = require('./routes/tags');
 const authMiddleware = require('./middleware/auth');
 const pool = require('./db');
 const noteModel = require('./models/noteModel');
@@ -40,6 +42,8 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRouter);
 // Protected notes (but keep fallback if no token by using query param) - for now require token strictly
 app.use('/api/notes', authMiddleware, notesRouter);
+app.use('/api/notebooks', authMiddleware, notebooksRouter);
+app.use('/api/tags', authMiddleware, tagsRouter);
 
 // Test DB connection on startup
 (async () => {
