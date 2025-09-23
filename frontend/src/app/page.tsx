@@ -29,43 +29,103 @@ export default function Page() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
   
   const filters = ["Today", "This Week", "This Month"];
 
-  // Add note
-  const addNote = (newTitle: string, newContent: string) => {
+  // Fetch all notes
+  const fetchNotes = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+  const res = await fetch(`${API_BASE}/api/notes`);
+      if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
+      const data = await res.json();
+      const mapped: Note[] = data.map((n: any) => ({
+        id: n.id,
+        title: n.title || '',
+        content: n.content || '',
+        category: 'Notes',
+        date: 'Today',
+        time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : undefined
+      }));
+      setNotes(mapped);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
+  // Create note (calls backend)
+  const addNote = async (newTitle: string, newContent: string) => {
     if (!newTitle.trim()) return;
-    const newNote: Note = {
-      id: Date.now(),
-      title: newTitle,
-      content: newContent,
-      category: "Notes",
-      date: "Today",
-      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-    };
-    setNotes([newNote, ...notes]);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2600);
+    try {
+      setError(null);
+  const res = await fetch(`${API_BASE}/api/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle, content: newContent })
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
+      const note: Note = {
+        id: created.id,
+        title: created.title,
+        content: created.content,
+        category: 'Notes',
+        date: 'Today',
+        time: created.created_at ? new Date(created.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : undefined
+      };
+      setNotes(prev => [note, ...prev]);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2600);
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
 
   // Update note
-  const updateNote = () => {
+  const updateNote = async () => {
     if (!selected) return;
-    setNotes(
-      notes.map((n) => (n.id === selected.id ? { ...n, title, content } : n))
-    );
-    setSelected(null);
-    setTitle("");
-    setContent("");
-  };
-
-  // Delete note
-  const deleteNote = (id: number) => {
-    setNotes(notes.filter((n) => n.id !== id));
-    if (selected?.id === id) {
+    try {
+      setError(null);
+  const res = await fetch(`${API_BASE}/api/notes/${selected.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updated = await res.json();
+      setNotes(prev => prev.map(n => n.id === selected.id ? { ...n, title: updated.title, content: updated.content } : n));
       setSelected(null);
       setTitle("");
       setContent("");
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  // Delete note
+  const deleteNote = async (id: number) => {
+    try {
+      setError(null);
+  const res = await fetch(`${API_BASE}/api/notes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      setNotes(prev => prev.filter(n => n.id !== id));
+      if (selected?.id === id) {
+        setSelected(null);
+        setTitle("");
+        setContent("");
+      }
+    } catch (e: any) {
+      setError(e.message);
     }
   };
 
@@ -109,6 +169,8 @@ export default function Page() {
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-primary tracking-tight">My Notes</h1>
+          {loading && <span className="text-xs text-secondary">Loading...</span>}
+          {error && <span className="text-xs text-[var(--github-danger)]">{error}</span>}
         </div>
         
         {/* Filters */}

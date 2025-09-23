@@ -1,8 +1,10 @@
 const express = require('express');
 require('dotenv').config();
-
+const fs = require('fs');
+const path = require('path');
 const notesRouter = require('./routes/notes');
 const pool = require('./db');
+const noteModel = require('./models/noteModel');
 
 const app = express();
 app.use(express.json());
@@ -19,6 +21,19 @@ app.use((req, res, next) => {
 
 
 app.get('/', (req, res) => res.send('NoteApp backend is running'));
+app.get('/health', async (req, res) => {
+  try {
+    const dbNow = await pool.query('SELECT NOW() as now');
+    const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`);
+    res.json({
+      status: 'ok',
+      time: dbNow.rows[0].now,
+      tables: tables.rows.map(r => r.table_name)
+    });
+  } catch (e) {
+    res.status(500).json({ status: 'error', error: e.message });
+  }
+});
 app.use('/api/notes', notesRouter);
 
 // Test DB connection on startup
@@ -27,6 +42,27 @@ app.use('/api/notes', notesRouter);
     const r = await pool.query('SELECT NOW()');
     console.log('Connected to Postgres at', r.rows[0].now);
     console.log('Using DB:', process.env.PGDATABASE, 'host:', process.env.PGHOST);
+    // Apply all migration files in alphanumeric order
+    const migrationsDir = path.join(__dirname, 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const files = fs.readdirSync(migrationsDir)
+        .filter(f => f.endsWith('.sql'))
+        .sort();
+      for (const file of files) {
+        const full = path.join(migrationsDir, file);
+        const sql = fs.readFileSync(full, 'utf8');
+        try {
+          await pool.query(sql);
+          console.log('Migration applied:', file);
+        } catch (e) {
+          console.warn('Migration', file, 'failed (continuing):', e.message);
+        }
+      }
+    } else {
+      console.warn('Migrations directory missing:', migrationsDir);
+    }
+    // Ensure notes table structure after migrations
+    try { await noteModel._debugEnsure(); console.log('Notes table ensured post-migrations.'); } catch (e) { console.error('Ensure table failed:', e.message); }
   } catch (err) {
     console.error('Postgres connection failed:', err.message);
   }

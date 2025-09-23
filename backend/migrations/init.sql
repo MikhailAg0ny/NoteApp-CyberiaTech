@@ -1,4 +1,4 @@
--- Users, Notebooks, Notes, Tags, Note_Tags schema
+-- Users, Notebooks, Notes, Tags, Note_Tags schema (canonical)
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS note_tags (
   CONSTRAINT fk_nt_tag FOREIGN KEY (tag_id) REFERENCES tags(tag_id) ON DELETE CASCADE
 );
 
--- optional indexes for faster lookup
 CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_notes_notebook_id ON notes(notebook_id);
 CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id);
