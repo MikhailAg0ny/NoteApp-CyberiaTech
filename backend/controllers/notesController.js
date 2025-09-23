@@ -1,9 +1,31 @@
 const noteModel = require('../models/noteModel');
 
+function requireUser(req, res) {
+  if (!req.user || !req.user.user_id) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  return req.user.user_id;
+}
+
 exports.getAllNotes = async (req, res) => {
   try {
-    const notes = await noteModel.getAllNotes();
+  const userId = requireUser(req, res); if (!userId) return;
+    const notes = await noteModel.getAllNotes(userId);
     res.json(notes);
+  } catch (err) {
+    console.error('GET /api/notes failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getSingleNote = async (req, res) => {
+  try {
+  const userId = requireUser(req, res); if (!userId) return;
+    const id = parseInt(req.params.id, 10);
+    const note = await noteModel.getNoteById(userId, id);
+    if (!note) return res.status(404).json({ error: 'note not found' });
+    res.json(note);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -11,35 +33,41 @@ exports.getAllNotes = async (req, res) => {
 
 exports.createNote = async (req, res) => {
   try {
-    const { title, content } = req.body;
+    const userId = requireUser(req, res); if (!userId) return;
+    const { title, content, notebook_id, tags } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const note = await noteModel.createNote(title, content);
+    const note = await noteModel.createNote(userId, notebook_id, title, content, Array.isArray(tags) ? tags : []);
     res.status(201).json(note);
   } catch (err) {
+    console.error('POST /api/notes failed:', err);
     res.status(500).json({ error: err.message });
   }
 };
 
 exports.updateNote = async (req, res) => {
   try {
+    const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
-    const { title, content } = req.body;
+    const { title, content, notebook_id, tags } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const updated = await noteModel.updateNote(id, title, content);
+    const updated = await noteModel.updateNote(userId, id, title, content, notebook_id, Array.isArray(tags) ? tags : undefined);
     if (!updated) return res.status(404).json({ error: 'note not found' });
     res.json(updated);
   } catch (err) {
+    console.error('PUT /api/notes/:id failed:', err);
     res.status(500).json({ error: err.message });
   }
 };
 
 exports.deleteNote = async (req, res) => {
   try {
+  const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
-    const deleted = await noteModel.deleteNote(id);
+    const deleted = await noteModel.deleteNote(userId, id);
     if (!deleted) return res.status(404).json({ error: 'note not found' });
     res.json({ success: true, id: deleted.id });
   } catch (err) {
+    console.error('DELETE /api/notes/:id failed:', err);
     res.status(500).json({ error: err.message });
   }
 };
