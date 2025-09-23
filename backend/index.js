@@ -7,8 +7,10 @@ const pool = require('./db');
 const app = express();
 app.use(express.json());
 
-pp.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000'); // adjust origin for production
+// Simple CORS helper - allow local dev origin by default
+app.use((req, res, next) => {
+  const allowed = process.env.CORS_ORIGIN || 'http://localhost:3000';
+  res.header('Access-Control-Allow-Origin', allowed);
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -24,6 +26,7 @@ app.use('/api/notes', notesRouter);
   try {
     const r = await pool.query('SELECT NOW()');
     console.log('Connected to Postgres at', r.rows[0].now);
+    console.log('Using DB:', process.env.PGDATABASE, 'host:', process.env.PGHOST);
   } catch (err) {
     console.error('Postgres connection failed:', err.message);
   }
