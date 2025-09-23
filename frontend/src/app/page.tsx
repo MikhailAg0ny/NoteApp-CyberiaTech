@@ -32,6 +32,8 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const userId = typeof window !== 'undefined' ? localStorage.getItem('user_id') : null; // retained for display if needed (not sent as param)
   
   const filters = ["Today", "This Week", "This Month"];
 
@@ -40,8 +42,13 @@ export default function Page() {
     try {
       setLoading(true);
       setError(null);
-  const res = await fetch(`${API_BASE}/api/notes`);
-      if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+  const res = await fetch(`${API_BASE}/api/notes`, { headers: { 'Authorization': `Bearer ${token}` }});
+  if (res.status === 401) { window.location.href = '/login'; return; }
+  if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
       const data = await res.json();
       const mapped: Note[] = data.map((n: any) => ({
         id: n.id,
@@ -70,10 +77,11 @@ export default function Page() {
       setError(null);
   const res = await fetch(`${API_BASE}/api/notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ title: newTitle, content: newContent })
       });
-      if (!res.ok) throw new Error('Create failed');
+  if (res.status === 401) { window.location.href='/login'; return; }
+  if (!res.ok) throw new Error('Create failed');
       const created = await res.json();
       const note: Note = {
         id: created.id,
@@ -98,10 +106,11 @@ export default function Page() {
       setError(null);
   const res = await fetch(`${API_BASE}/api/notes/${selected.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ title, content })
       });
-      if (!res.ok) throw new Error('Update failed');
+  if (res.status === 401) { window.location.href='/login'; return; }
+  if (!res.ok) throw new Error('Update failed');
       const updated = await res.json();
       setNotes(prev => prev.map(n => n.id === selected.id ? { ...n, title: updated.title, content: updated.content } : n));
       setSelected(null);
@@ -116,8 +125,9 @@ export default function Page() {
   const deleteNote = async (id: number) => {
     try {
       setError(null);
-  const res = await fetch(`${API_BASE}/api/notes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
+  const res = await fetch(`${API_BASE}/api/notes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }});
+  if (res.status === 401) { window.location.href='/login'; return; }
+  if (!res.ok) throw new Error('Delete failed');
       setNotes(prev => prev.filter(n => n.id !== id));
       if (selected?.id === id) {
         setSelected(null);
@@ -173,7 +183,7 @@ export default function Page() {
           {error && <span className="text-xs text-[var(--github-danger)]">{error}</span>}
         </div>
         
-        {/* Filters */}
+        {/* Filters + Logout */}
   <div className="flex items-center bg-surface border border-default rounded-full p-1">
           {filters.map((filter) => (
             <button
@@ -188,6 +198,10 @@ export default function Page() {
               {filter}
             </button>
           ))}
+          <button
+            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('user_id'); window.location.href='/login'; }}
+            className="ml-2 px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)]"
+          >Logout</button>
         </div>
       </div>
 

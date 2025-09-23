@@ -1,13 +1,16 @@
 const noteModel = require('../models/noteModel');
 
-function resolveUserId(req) {
-  const id = parseInt(req.query.user_id || '1', 10);
-  return Number.isNaN(id) ? 1 : id;
+function requireUser(req, res) {
+  if (!req.user || !req.user.user_id) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  return req.user.user_id;
 }
 
 exports.getAllNotes = async (req, res) => {
   try {
-    const userId = resolveUserId(req);
+  const userId = requireUser(req, res); if (!userId) return;
     const notes = await noteModel.getAllNotes(userId);
     res.json(notes);
   } catch (err) {
@@ -18,7 +21,7 @@ exports.getAllNotes = async (req, res) => {
 
 exports.getSingleNote = async (req, res) => {
   try {
-    const userId = resolveUserId(req);
+  const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
     const note = await noteModel.getNoteById(userId, id);
     if (!note) return res.status(404).json({ error: 'note not found' });
@@ -30,7 +33,7 @@ exports.getSingleNote = async (req, res) => {
 
 exports.createNote = async (req, res) => {
   try {
-    const userId = resolveUserId(req);
+  const userId = requireUser(req, res); if (!userId) return;
     const { title, content, notebook_id } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
     const note = await noteModel.createNote(userId, notebook_id, title, content);
@@ -43,7 +46,7 @@ exports.createNote = async (req, res) => {
 
 exports.updateNote = async (req, res) => {
   try {
-    const userId = resolveUserId(req);
+  const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
     const { title, content, notebook_id } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
@@ -58,7 +61,7 @@ exports.updateNote = async (req, res) => {
 
 exports.deleteNote = async (req, res) => {
   try {
-    const userId = resolveUserId(req);
+  const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
     const deleted = await noteModel.deleteNote(userId, id);
     if (!deleted) return res.status(404).json({ error: 'note not found' });

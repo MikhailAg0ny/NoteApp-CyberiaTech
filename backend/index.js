@@ -3,6 +3,8 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const notesRouter = require('./routes/notes');
+const authRouter = require('./routes/auth');
+const authMiddleware = require('./middleware/auth');
 const pool = require('./db');
 const noteModel = require('./models/noteModel');
 
@@ -13,7 +15,8 @@ app.use(express.json());
 app.use((req, res, next) => {
   const allowed = process.env.CORS_ORIGIN || 'http://localhost:3000';
   res.header('Access-Control-Allow-Origin', allowed);
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Expose-Headers', 'Authorization');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -34,7 +37,9 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'error', error: e.message });
   }
 });
-app.use('/api/notes', notesRouter);
+app.use('/api/auth', authRouter);
+// Protected notes (but keep fallback if no token by using query param) - for now require token strictly
+app.use('/api/notes', authMiddleware, notesRouter);
 
 // Test DB connection on startup
 (async () => {
