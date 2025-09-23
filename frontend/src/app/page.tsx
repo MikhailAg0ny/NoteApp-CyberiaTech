@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from "react";
 import CreateNoteModal from './components/CreateNoteModal';
+import SettingsModal from './components/SettingsModal';
 
 type Note = {
   id: number;
@@ -26,6 +27,8 @@ export default function Page() {
   const [content, setContent] = useState("");
   const [activeFilter, setActiveFilter] = useState("Today");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const filters = ["Today", "This Week", "This Month"];
 
@@ -41,6 +44,8 @@ export default function Page() {
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
     };
     setNotes([newNote, ...notes]);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2600);
   };
 
   // Update note
@@ -77,38 +82,45 @@ export default function Page() {
       setIsCreateModalOpen(true);
     };
     
-    document.addEventListener('openCreateNoteModal', handleOpenCreateModal);
+  const handleOpenSettings = () => setIsSettingsOpen(true);
+  document.addEventListener('openCreateNoteModal', handleOpenCreateModal);
+  document.addEventListener('openSettingsModal', handleOpenSettings);
     
     return () => {
       document.removeEventListener('openCreateNoteModal', handleOpenCreateModal);
+      document.removeEventListener('openSettingsModal', handleOpenSettings);
     };
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] p-8">
+  <div className="flex flex-col h-full bg-app p-8 transition-colors">
       {/* Create Note Modal */}
       <CreateNoteModal 
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSave={addNote}
       />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
       
       {/* Header with title */}
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-[#c9d1d9] tracking-tight">My Notes</h1>
+          <h1 className="text-2xl font-semibold text-primary tracking-tight">My Notes</h1>
         </div>
         
         {/* Filters */}
-        <div className="flex items-center bg-[#161b22] rounded-full p-1">
+  <div className="flex items-center bg-surface border border-default rounded-full p-1">
           {filters.map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
               className={`px-5 py-1.5 rounded-full text-sm font-medium ${
                 activeFilter === filter
-                  ? "bg-[#21262d] text-[#c9d1d9]"
-                  : "text-[#8b949e] hover:text-[#c9d1d9]"
+                  ? "bg-[var(--github-accent)] text-white"
+                  : "text-secondary hover:text-primary"
               }`}
             >
               {filter}
@@ -119,24 +131,24 @@ export default function Page() {
 
       {selected ? (
         /* Note Editor */
-        <div className="bg-[#161b22] rounded-xl p-6 shadow-md border border-[#30363d]">
+        <div className="card rounded-xl p-6 shadow-md">
           <input
             type="text"
             placeholder="Title"
-            className="w-full text-2xl font-semibold mb-4 bg-transparent outline-none border-b border-[#30363d] focus:border-[#388bfd] pb-3 text-[#c9d1d9] tracking-tight"
+            className="w-full text-2xl font-semibold mb-4 bg-transparent outline-none border-b border-default focus:border-[var(--github-accent)] pb-3 text-primary tracking-tight transition-colors"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <textarea
             placeholder="Start writing your note..."
-            className="w-full min-h-[300px] text-[#8b949e] bg-transparent resize-none outline-none focus:ring-0 focus:border-0 leading-relaxed"
+            className="w-full min-h-[300px] text-secondary bg-transparent resize-none outline-none focus:ring-0 focus:border-0 leading-relaxed"
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
           <div className="mt-5 flex gap-3">
             <button
               onClick={updateNote}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#1f6feb] text-white font-medium rounded-md hover:bg-[#388bfd] transition"
+              className="flex items-center gap-2 px-5 py-2.5 btn-primary font-medium rounded-md transition"
             >
               <PencilSquareIcon className="w-4 h-4" />
               <span>Save</span>
@@ -147,7 +159,7 @@ export default function Page() {
                 setTitle("");
                 setContent("");
               }}
-              className="px-5 py-2.5 bg-[#21262d] text-[#8b949e] rounded-md hover:bg-[#30363d] hover:text-[#c9d1d9] transition font-medium"
+              className="px-5 py-2.5 btn-muted rounded-md transition font-medium"
             >
               Cancel
             </button>
@@ -158,34 +170,33 @@ export default function Page() {
           {/* Notes Grid */}
           {notes.length > 0 ? (
             <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-5 text-[#c9d1d9] tracking-tight">All Notes</h2>
+              <h2 className="text-xl font-semibold mb-5 text-primary tracking-tight">All Notes</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {notes.map((note) => (
+                {notes.map((note, idx) => (
                   <div
                     key={note.id}
-                    className="bg-[#161b22] rounded-lg p-5 shadow-sm hover:shadow-md cursor-default transition border border-[#30363d] group"
+                    className="card rounded-lg p-5 shadow-sm cursor-default transition group anim-slide-up card-hover"
+                    style={{ animationDelay: `${idx * 60}ms` }}
                   >
-                    <h3 className="font-medium text-lg mb-2 truncate text-[#c9d1d9] group-hover:text-white transition-colors">{note.title}</h3>
-                    <p className="text-[#8b949e] line-clamp-3 mb-4 text-sm leading-relaxed">
+                    <h3 className="font-medium text-lg mb-2 truncate text-primary group-hover:text-primary transition-colors">{note.title}</h3>
+                    <p className="text-secondary line-clamp-3 mb-4 text-sm leading-relaxed">
                       {note.content || "No content"}
                     </p>
                     <div className="flex justify-between items-center mt-auto">
-                      <div className="text-xs font-medium text-[#8b949e]">
-                        {note.time && (
-                          <span className="text-xs text-[#8b949e]">{note.time}</span>
-                        )}
+                      <div className="text-xs font-medium text-secondary">
+                        {note.time && <span className="text-xs text-secondary">{note.time}</span>}
                       </div>
                       <div className="flex space-x-3">
                         <button
                           onClick={() => selectNote(note)}
-                          className="text-xs text-[#8b949e] hover:text-[#388bfd] flex items-center opacity-70 hover:opacity-100 transition-opacity"
+                          className="text-xs text-secondary hover:text-[var(--github-accent)] flex items-center opacity-70 hover:opacity-100 transition-colors"
                           title="Edit note"
                         >
                           <PencilSquareIcon className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => deleteNote(note.id)}
-                          className="text-xs text-[#8b949e] hover:text-[#f85149] flex items-center opacity-70 hover:opacity-100 transition-opacity"
+                          className="text-xs text-secondary hover:text-[var(--github-danger)] flex items-center opacity-70 hover:opacity-100 transition-colors"
                           title="Delete note"
                         >
                           <TrashIcon className="w-4 h-4" />
@@ -199,14 +210,14 @@ export default function Page() {
           ) : (
             // Empty state
             <div className="flex flex-col items-center justify-center py-24">
-              <div className="w-20 h-20 bg-[#21262d] rounded-full flex items-center justify-center mb-6 text-[#8b949e]">
+              <div className="w-20 h-20 bg-surface border border-default rounded-full flex items-center justify-center mb-6 text-secondary">
                 <DocumentTextIcon className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-semibold text-[#c9d1d9] mb-3 tracking-tight">No notes yet</h3>
-              <p className="text-[#8b949e] mb-8 text-center max-w-sm">Create your first note to get started with CyberiaTech</p>
+              <h3 className="text-2xl font-semibold text-primary mb-3 tracking-tight">No notes yet</h3>
+              <p className="text-secondary mb-8 text-center max-w-sm">Create your first note to get started with CyberiaTech</p>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#1f6feb] text-white font-medium rounded-md hover:bg-[#388bfd] transition"
+                className="flex items-center gap-2 px-5 py-2.5 btn-primary font-medium rounded-md transition"
               >
                 <PlusIcon className="w-5 h-5" />
                 <span>Create Note</span>
@@ -218,12 +229,20 @@ export default function Page() {
           {notes.length > 0 && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-[#1f6feb] text-white flex items-center justify-center shadow-lg hover:bg-[#388bfd] transition"
+              className="fixed bottom-8 right-8 w-14 h-14 rounded-full btn-primary text-white flex items-center justify-center shadow-lg transition pulse-button"
             >
               <PlusIcon className="w-6 h-6" />
             </button>
           )}
         </>
+      )}
+
+      {/* Toast */}
+      {showToast && (
+        <div className="fixed bottom-28 right-8 card px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 anim-toast-in">
+          <div className="w-2 h-2 rounded-full bg-[var(--github-accent)] animate-pulse" />
+          <span className="text-sm text-primary">Note created</span>
+        </div>
       )}
     </div>
   );
