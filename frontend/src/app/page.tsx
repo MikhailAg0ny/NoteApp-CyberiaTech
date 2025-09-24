@@ -375,7 +375,7 @@ export default function Page() {
                     key={note.id}
                     className="card rounded-lg p-5 shadow-sm cursor-pointer 
                     transition-all duration-200 group anim-slide-up 
-                    hover:shadow-md hover:-translate-y-1 hover:bg-surface/70"
+                  hover:shadow-md hover:-translate-y-1 hover:bg-surface/70"
                     style={{ animationDelay: `${idx * 60}ms` }}
                   >
                     <h3 className="font-medium text-lg mb-2 truncate text-primary group-hover:text-primary transition-colors">
