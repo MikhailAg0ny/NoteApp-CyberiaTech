@@ -9,7 +9,9 @@ export interface NoteRecord {
   notebook_id?: number | null;
   notebook_name?: string | null;
   tags?: { id?: number; name: string }[];
+  createdAt?: string | null;
   created_at?: string;
+  updatedAt?: string | null;
   updated_at?: string;
 }
 
@@ -42,6 +44,19 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
   }, [open, note]);
 
   if (!open || !note) return null;
+
+  const createdDisplay = (() => {
+    const source = note.createdAt ?? note.created_at ?? null;
+    if (!source) return null;
+    const parsed = new Date(source);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  })();
 
   const close = () => {
     if (dirty && !confirm('Discard unsaved changes?')) return;
@@ -96,7 +111,12 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--github-accent)] to-[var(--github-accent-hover)] flex items-center justify-center shadow-lg flex-shrink-0">
               <PencilSquareIcon className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-xl font-bold text-primary truncate">{note.title || 'Untitled Note'}</h2>
+            <div className="flex flex-col min-w-0">
+              <h2 className="text-xl font-bold text-primary truncate">{note.title || 'Untitled Note'}</h2>
+              {createdDisplay && (
+                <p className="text-xs text-secondary mt-1">Created {createdDisplay}</p>
+              )}
+            </div>
             {dirty && (
               <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium flex-shrink-0">Unsaved</span>
             )}

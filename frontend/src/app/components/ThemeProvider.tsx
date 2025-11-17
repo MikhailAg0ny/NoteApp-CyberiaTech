@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Theme = 'light' | 'dark';
 
@@ -13,9 +14,10 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [theme, setThemeState] = useState<Theme>('dark');
-  const [splashDone, setSplashDone] = useState(false);
-  const [splashPhase, setSplashPhase] = useState<'in' | 'out'>('in');
+  const [splashDone, setSplashDone] = useState(true);
+  const [splashPhase, setSplashPhase] = useState<'in' | 'out'>('out');
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? (localStorage.getItem('theme') as Theme | null) : null;
@@ -29,12 +31,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
-  // Splash lifecycle: fade in -> fade out
+  // Splash lifecycle: play once after login when landing on home
   useEffect(() => {
-    const exitTimer = setTimeout(() => setSplashPhase('out'), 1400); // start fade out
-    const doneTimer = setTimeout(() => setSplashDone(true), 2000); // unmount after fade out
-    return () => { clearTimeout(exitTimer); clearTimeout(doneTimer); };
-  }, []);
+    if (typeof window === 'undefined') return;
+
+    const shouldPlay = pathname === '/' && sessionStorage.getItem('playSplashAfterLogin') === 'true';
+    if (!shouldPlay) {
+      setSplashDone(true);
+      setSplashPhase('out');
+      return;
+    }
+
+    sessionStorage.removeItem('playSplashAfterLogin');
+    setSplashDone(false);
+    setSplashPhase('in');
+    const exitTimer = setTimeout(() => setSplashPhase('out'), 1400);
+    const doneTimer = setTimeout(() => setSplashDone(true), 2000);
+    return () => {
+      clearTimeout(exitTimer);
+      clearTimeout(doneTimer);
+    };
+  }, [pathname]);
 
   const setTheme = (t: Theme) => setThemeState(t);
   const toggleTheme = () => setThemeState(prev => prev === 'dark' ? 'light' : 'dark');
