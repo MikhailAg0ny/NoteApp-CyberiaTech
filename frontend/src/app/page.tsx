@@ -1,10 +1,15 @@
 "use client";
 
-import { DocumentTextIcon, PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  DocumentTextIcon,
+  PlusIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import CreateNoteModal from './components/CreateNoteModal';
-import SettingsModal from './components/SettingsModal';
-import NoteModal from './components/NoteModal';
+import CreateNoteModal from "./components/CreateNoteModal";
+import SettingsModal from "./components/SettingsModal";
+import NoteModal from "./components/NoteModal";
 
 type Note = {
   id: number;
@@ -21,8 +26,10 @@ type Note = {
 export default function Page() {
   // Starting with an empty notes array
   const [notes, setNotes] = useState<Note[]>([]);
-  const [notebooks, setNotebooks] = useState<{id:number; name:string}[]>([]);
-  const [tags, setTags] = useState<{id:number; name:string}[]>([]);
+  const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
+    []
+  );
+  const [tags, setTags] = useState<{ id: number; name: string }[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -34,10 +41,12 @@ export default function Page() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const userId = typeof window !== 'undefined' ? localStorage.getItem('user_id') : null; // retained for display if needed (not sent as param)
-  
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const userId =
+    typeof window !== "undefined" ? localStorage.getItem("user_id") : null; // retained for display if needed (not sent as param)
+
   const filters = ["Today", "This Week", "This Month"];
 
   // Fetch all notes
@@ -46,23 +55,33 @@ export default function Page() {
       setLoading(true);
       setError(null);
       if (!token) {
-        window.location.href = '/login';
+        window.location.href = "/login";
         return;
       }
-      const res = await fetch(`${API_BASE}/api/notes`, { headers: { 'Authorization': `Bearer ${token}` }});
-  if (res.status === 401) { window.location.href = '/login'; return; }
-  if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
+      const res = await fetch(`${API_BASE}/api/notes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
       const data = await res.json();
       const mapped: Note[] = data.map((n: any) => ({
         id: n.id,
-        title: n.title || '',
-        content: n.content || '',
+        title: n.title || "",
+        content: n.content || "",
         notebook_id: n.notebook_id ?? null,
         notebook_name: n.notebook_name ?? null,
         tags: n.tags || [],
-        category: 'Notes',
-        date: 'Today',
-        time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : undefined
+        category: "Notes",
+        date: "Today",
+        time: n.created_at
+          ? new Date(n.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : undefined,
       }));
       setNotes(mapped);
     } catch (e: any) {
@@ -74,9 +93,14 @@ export default function Page() {
 
   const fetchNotebooks = async () => {
     try {
-      if (!token) return; 
-      const res = await fetch(`${API_BASE}/api/notebooks`, { headers: { 'Authorization': `Bearer ${token}` }});
-      if (res.status === 401) { window.location.href='/login'; return; }
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/notebooks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setNotebooks(data);
@@ -85,9 +109,14 @@ export default function Page() {
 
   const fetchTags = async () => {
     try {
-      if (!token) return; 
-      const res = await fetch(`${API_BASE}/api/tags`, { headers: { 'Authorization': `Bearer ${token}` }});
-      if (res.status === 401) { window.location.href='/login'; return; }
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/tags`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setTags(data);
@@ -98,21 +127,37 @@ export default function Page() {
     fetchNotes();
     fetchNotebooks();
     fetchTags();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Create note (calls backend)
-  const addNote = async (newTitle: string, newContent: string, notebookId: number | null, tagNames: string[]) => {
+  const addNote = async (
+    newTitle: string,
+    newContent: string,
+    notebookId: number | null,
+    tagNames: string[]
+  ) => {
     if (!newTitle.trim()) return;
     try {
       setError(null);
       const res = await fetch(`${API_BASE}/api/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: newTitle, content: newContent, notebook_id: notebookId, tags: tagNames })
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newTitle,
+          content: newContent,
+          notebook_id: notebookId,
+          tags: tagNames,
+        }),
       });
-      if (res.status === 401) { window.location.href='/login'; return; }
-      if (!res.ok) throw new Error('Create failed');
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) throw new Error("Create failed");
       const created = await res.json();
       const note: Note = {
         id: created.id,
@@ -121,11 +166,16 @@ export default function Page() {
         notebook_id: created.notebook_id ?? null,
         notebook_name: created.notebook_name ?? null,
         tags: created.tags || [],
-        category: 'Notes',
-        date: 'Today',
-        time: created.created_at ? new Date(created.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : undefined
+        category: "Notes",
+        date: "Today",
+        time: created.created_at
+          ? new Date(created.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : undefined,
       };
-      setNotes(prev => [note, ...prev]);
+      setNotes((prev) => [note, ...prev]);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2600);
       // Open the newly created note in modal for viewing/editing
@@ -137,19 +187,62 @@ export default function Page() {
   };
 
   // Update note
-  const saveNoteChanges = async (noteId: number, payload: { title: string; content: string; notebook_id: number | null; tags: string[] }) => {
+  const saveNoteChanges = async (
+    noteId: number,
+    payload: {
+      title: string;
+      content: string;
+      notebook_id: number | null;
+      tags: string[];
+    }
+  ) => {
     try {
       setError(null);
       const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: payload.title, content: payload.content, notebook_id: payload.notebook_id, tags: payload.tags })
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: payload.title,
+          content: payload.content,
+          notebook_id: payload.notebook_id,
+          tags: payload.tags,
+        }),
       });
-      if (res.status === 401) { window.location.href='/login'; return; }
-      if (!res.ok) throw new Error('Update failed');
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) throw new Error("Update failed");
       const updated = await res.json();
-      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, title: updated.title, content: updated.content, notebook_id: updated.notebook_id ?? null, notebook_name: updated.notebook_name ?? null, tags: updated.tags || [] } : n));
-      setSelected(prev => prev && prev.id === noteId ? { ...prev, title: updated.title, content: updated.content, notebook_id: updated.notebook_id ?? null, notebook_name: updated.notebook_name ?? null, tags: updated.tags || [] } : prev);
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId
+            ? {
+                ...n,
+                title: updated.title,
+                content: updated.content,
+                notebook_id: updated.notebook_id ?? null,
+                notebook_name: updated.notebook_name ?? null,
+                tags: updated.tags || [],
+              }
+            : n
+        )
+      );
+      setSelected((prev) =>
+        prev && prev.id === noteId
+          ? {
+              ...prev,
+              title: updated.title,
+              content: updated.content,
+              notebook_id: updated.notebook_id ?? null,
+              notebook_name: updated.notebook_name ?? null,
+              tags: updated.tags || [],
+            }
+          : prev
+      );
     } catch (e: any) {
       setError(e.message);
     }
@@ -159,10 +252,16 @@ export default function Page() {
   const deleteNote = async (id: number) => {
     try {
       setError(null);
-  const res = await fetch(`${API_BASE}/api/notes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }});
-  if (res.status === 401) { window.location.href='/login'; return; }
-  if (!res.ok) throw new Error('Delete failed');
-      setNotes(prev => prev.filter(n => n.id !== id));
+      const res = await fetch(`${API_BASE}/api/notes/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) throw new Error("Delete failed");
+      setNotes((prev) => prev.filter((n) => n.id !== id));
       if (selected?.id === id) {
         setSelected(null);
         setIsNoteModalOpen(false);
@@ -183,26 +282,29 @@ export default function Page() {
     const handleOpenCreateModal = () => {
       setIsCreateModalOpen(true);
     };
-    
-  const handleOpenSettings = () => setIsSettingsOpen(true);
-  document.addEventListener('openCreateNoteModal', handleOpenCreateModal);
-  document.addEventListener('openSettingsModal', handleOpenSettings);
+
+    const handleOpenSettings = () => setIsSettingsOpen(true);
+    document.addEventListener("openCreateNoteModal", handleOpenCreateModal);
+    document.addEventListener("openSettingsModal", handleOpenSettings);
     const handleFilterNotebook = (e: any) => {
       setActiveNotebook(e.detail?.notebookId ?? null);
     };
-    document.addEventListener('filterNotebook', handleFilterNotebook);
-    
+    document.addEventListener("filterNotebook", handleFilterNotebook);
+
     return () => {
-      document.removeEventListener('openCreateNoteModal', handleOpenCreateModal);
-      document.removeEventListener('openSettingsModal', handleOpenSettings);
-      document.removeEventListener('filterNotebook', handleFilterNotebook);
+      document.removeEventListener(
+        "openCreateNoteModal",
+        handleOpenCreateModal
+      );
+      document.removeEventListener("openSettingsModal", handleOpenSettings);
+      document.removeEventListener("filterNotebook", handleFilterNotebook);
     };
   }, []);
 
   return (
   <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
       {/* Create Note Modal */}
-      <CreateNoteModal 
+      <CreateNoteModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSave={addNote}
@@ -212,7 +314,7 @@ export default function Page() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
-      
+
       {/* Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div className="flex items-center gap-3">
@@ -230,7 +332,7 @@ export default function Page() {
             </div>
           )}
         </div>
-        
+
         {/* Filters + Logout */}
   <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
           {filters.map((filter) => (
@@ -344,7 +446,6 @@ export default function Page() {
                     </div>
                   </div>
                 ))}
-              </div>
             </div>
           ) : (
             // Empty state
@@ -362,10 +463,12 @@ export default function Page() {
                 <span>Create Your First Note</span>
               </button>
             </div>
-          )}
-          
-          {/* Create Note Button */}
-          {notes.length > 0 && (
+            <h3 className="text-2xl font-semibold text-primary mb-3 tracking-tight">
+              No notes yet
+            </h3>
+            <p className="text-secondary mb-8 text-center max-w-sm">
+              Create your first note to get started with CyberiaTech
+            </p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
               className="fixed bottom-6 md:bottom-8 right-6 md:right-8 w-14 h-14 md:w-16 md:h-16 rounded-full btn-primary text-white flex items-center justify-center shadow-2xl transition-smooth pulse-button hover:scale-110 active:scale-95 z-50"
@@ -373,8 +476,19 @@ export default function Page() {
             >
               <PlusIcon className="w-6 h-6 md:w-7 md:h-7" />
             </button>
-          )}
-        </>
+          </div>
+        )}
+
+        {/* Create Note Button */}
+        {notes.length > 0 && (
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="fixed bottom-6 right-6 w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-xl transition-transform hover:scale-110"
+          >
+            <PlusIcon className="w-6 h-6" />
+          </button>
+        )}
+      </>
 
       {/* Toast */}
       {showToast && (
@@ -391,11 +505,13 @@ export default function Page() {
         open={isNoteModalOpen && !!selected}
         note={selected}
         notebooks={notebooks}
-        onClose={() => { setIsNoteModalOpen(false); setSelected(null); }}
+        onClose={() => {
+          setIsNoteModalOpen(false);
+          setSelected(null);
+        }}
         onSave={saveNoteChanges}
         onDelete={deleteNote}
       />
     </div>
   );
 }
-

@@ -1,24 +1,39 @@
-'use client';
+"use client";
 
-import { PencilSquareIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { PencilSquareIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
 
 interface CreateNoteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, content: string, notebookId: number | null, tags: string[]) => void;
+  onSave: (
+    title: string,
+    content: string,
+    notebookId: number | null,
+    tags: string[]
+  ) => void;
   notebooks: { id: number; name: string }[];
   defaultNotebookId?: number | null;
 }
 
-export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, defaultNotebookId }: CreateNoteModalProps) {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+export default function CreateNoteModal({
+  isOpen,
+  onClose,
+  onSave,
+  notebooks,
+  defaultNotebookId,
+}: CreateNoteModalProps) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
-  const [notebookId, setNotebookId] = useState<number | null>(defaultNotebookId ?? null);
-  const [tagInput, setTagInput] = useState('');
+  const [notebookId, setNotebookId] = useState<number | null>(
+    defaultNotebookId ?? null
+  );
+  const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [notebooksList, setNotebooksList] =
+    useState<{ id: number; name: string }[]>(notebooks);
 
   // Calculate word and character count when content changes
   useEffect(() => {
@@ -27,36 +42,47 @@ export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, de
     setCharacterCount(content.length);
   }, [content]);
 
+  // Listen for notebook updates
+  useEffect(() => {
+    const handleNotebooksUpdate = (e: any) => {
+      setNotebooksList((prev) => [...prev, e.detail]);
+    };
+    document.addEventListener("notebooksUpdated", handleNotebooksUpdate);
+    return () =>
+      document.removeEventListener("notebooksUpdated", handleNotebooksUpdate);
+  }, []);
+
   if (!isOpen) return null;
 
   const addTag = (value: string) => {
     const cleaned = value.trim();
     if (!cleaned) return;
     if (!tags.includes(cleaned) && tags.length < 50) {
-      setTags(prev => [...prev, cleaned]);
+      setTags((prev) => [...prev, cleaned]);
     }
   };
 
   const handleTagKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       addTag(tagInput);
-      setTagInput('');
-    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
-      setTags(prev => prev.slice(0, -1));
+      setTagInput("");
+    } else if (e.key === "Backspace" && !tagInput && tags.length) {
+      setTags((prev) => prev.slice(0, -1));
     }
   };
 
-  const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
+  const removeTag = (t: string) =>
+    setTags((prev) => prev.filter((x) => x !== t));
 
   const handleSave = () => {
     if (title.trim()) {
       onSave(title, content, notebookId, tags);
-      setTitle('');
-      setContent('');
+      setTitle("");
+      setContent("");
       setNotebookId(defaultNotebookId ?? null);
       setTags([]);
-      setTagInput('');
+      setTagInput("");
       onClose();
     }
   };
@@ -70,19 +96,24 @@ export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, de
         className="w-full max-w-2xl card rounded-2xl shadow-2xl transform transition-all anim-scale-in gpu-accelerate"
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundImage: "linear-gradient(rgba(99, 110, 123, 0.05) 1px, transparent 1px)",
+          backgroundImage:
+            "linear-gradient(rgba(99, 110, 123, 0.05) 1px, transparent 1px)",
           backgroundSize: "100% 28px",
+
           boxShadow: "0 20px 60px -15px rgba(0,0,0,0.6)"
+
         }}
       >
         <div className="p-6 border-b border-default rounded-t-2xl transition-colors">
           <div className="flex items-center justify-between">
+
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--github-accent)] to-[var(--github-accent-hover)] flex items-center justify-center shadow-lg">
                 <PencilSquareIcon className="w-5 h-5 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-primary tracking-tight">Create New Note</h3>
             </div>
+
             <button
               onClick={onClose}
               className="text-secondary hover:text-primary transition-smooth p-2 rounded-lg hover:bg-[var(--github-border)]/40 active:scale-95"
@@ -105,6 +136,42 @@ export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, de
             />
             <p className="text-xs text-secondary mt-2">Give your note a memorable title</p>
           </div>
+
+
+          <textarea
+            placeholder="Write your note here..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full min-h-[250px] text-primary bg-transparent resize-none outline-none border-none focus:ring-0 leading-relaxed placeholder:text-secondary"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(99, 110, 123, 0.1) 1px, transparent 1px)",
+              backgroundSize: "100% 28px",
+              lineHeight: "28px",
+            }}
+          />
+
+          {/* Notebook selector */}
+          {notebooks.length > 0 && (
+            <div className="mt-4">
+              <label className="block text-xs font-semibold tracking-wide text-secondary mb-1">
+                Notebook
+              </label>
+              <select
+                value={notebookId ?? ""}
+                onChange={(e) =>
+                  setNotebookId(
+                    e.target.value ? parseInt(e.target.value, 10) : null
+                  )
+                }
+                className="w-full bg-surface border border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/50"
+              >
+                <option value="">No notebook</option>
+                {notebooks.map((nb) => (
+                  <option key={nb.id} value={nb.id}>
+                    {nb.name}
+                  </option>
+                ))}
 
           <div className="relative">
             <textarea
@@ -140,6 +207,7 @@ export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, de
               >
                 <option value="">📋 No notebook</option>
                 {notebooks.map(nb => <option key={nb.id} value={nb.id}>📔 {nb.name}</option>)}
+
               </select>
             </div>
           )}
@@ -170,7 +238,7 @@ export default function CreateNoteModal({ isOpen, onClose, onSave, notebooks, de
               />
             </div>
           </div>
-          
+
           {/* Word count */}
           <div className="flex items-center justify-between p-4 bg-surface/50 rounded-lg border border-default/50">
             <div className="flex items-center gap-4 text-xs text-secondary">
