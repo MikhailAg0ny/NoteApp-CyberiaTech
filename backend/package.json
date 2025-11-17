@@ -8,6 +8,8 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@blaze-cardano/sdk": "^0.2.44",
+    "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3",
     "bcrypt": "^5.1.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
