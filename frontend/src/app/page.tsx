@@ -3,7 +3,6 @@
 import {
   DocumentTextIcon,
   PlusIcon,
-  PencilSquareIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
@@ -21,6 +20,7 @@ type Note = {
   category?: string;
   date?: string;
   time?: string;
+  createdAt?: string | null;
 };
 
 export default function Page() {
@@ -33,6 +33,7 @@ export default function Page() {
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [previewing, setPreviewing] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [activeFilter, setActiveFilter] = useState("Today");
@@ -47,6 +48,14 @@ export default function Page() {
   const userId =
     typeof window !== "undefined" ? localStorage.getItem("user_id") : null; // retained for display if needed (not sent as param)
 
+  const redirectToLogin = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user_id");
+      window.location.href = "/login";
+    }
+  };
+
   const filters = ["Today", "This Week", "This Month"];
 
   // Fetch all notes
@@ -55,34 +64,38 @@ export default function Page() {
       setLoading(true);
       setError(null);
       if (!token) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       const res = await fetch(`${API_BASE}/api/notes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
       const data = await res.json();
-      const mapped: Note[] = data.map((n: any) => ({
-        id: n.id,
-        title: n.title || "",
-        content: n.content || "",
-        notebook_id: n.notebook_id ?? null,
-        notebook_name: n.notebook_name ?? null,
-        tags: n.tags || [],
-        category: "Notes",
-        date: "Today",
-        time: n.created_at
-          ? new Date(n.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : undefined,
-      }));
+      const mapped: Note[] = data.map((n: any) => {
+        const createdAt = n.created_at ?? null;
+        return {
+          id: n.id,
+          title: n.title || "",
+          content: n.content || "",
+          notebook_id: n.notebook_id ?? null,
+          notebook_name: n.notebook_name ?? null,
+          tags: n.tags || [],
+          category: "Notes",
+          date: "Today",
+          time: createdAt
+            ? new Date(createdAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : undefined,
+          createdAt,
+        };
+      });
       setNotes(mapped);
     } catch (e: any) {
       setError(e.message);
@@ -93,12 +106,15 @@ export default function Page() {
 
   const fetchNotebooks = async () => {
     try {
-      if (!token) return;
+      if (!token) {
+        redirectToLogin();
+        return;
+      }
       const res = await fetch(`${API_BASE}/api/notebooks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) return;
@@ -109,12 +125,15 @@ export default function Page() {
 
   const fetchTags = async () => {
     try {
-      if (!token) return;
+      if (!token) {
+        redirectToLogin();
+        return;
+      }
       const res = await fetch(`${API_BASE}/api/tags`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) return;
@@ -154,7 +173,7 @@ export default function Page() {
         }),
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) throw new Error("Create failed");
@@ -174,6 +193,7 @@ export default function Page() {
               minute: "2-digit",
             })
           : undefined,
+        createdAt: created.created_at ?? null,
       };
       setNotes((prev) => [note, ...prev]);
       setShowToast(true);
@@ -212,7 +232,7 @@ export default function Page() {
         }),
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) throw new Error("Update failed");
@@ -227,6 +247,7 @@ export default function Page() {
                 notebook_id: updated.notebook_id ?? null,
                 notebook_name: updated.notebook_name ?? null,
                 tags: updated.tags || [],
+                createdAt: updated.created_at ?? n.createdAt ?? null,
               }
             : n
         )
@@ -240,6 +261,7 @@ export default function Page() {
               notebook_id: updated.notebook_id ?? null,
               notebook_name: updated.notebook_name ?? null,
               tags: updated.tags || [],
+              createdAt: updated.created_at ?? prev.createdAt ?? null,
             }
           : prev
       );
@@ -257,7 +279,7 @@ export default function Page() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        window.location.href = "/login";
+        redirectToLogin();
         return;
       }
       if (!res.ok) throw new Error("Delete failed");
@@ -300,6 +322,50 @@ export default function Page() {
       document.removeEventListener("filterNotebook", handleFilterNotebook);
     };
   }, []);
+
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date(startOfToday);
+  const weekday = (startOfToday.getDay() + 6) % 7; // convert so Monday = 0
+  startOfWeek.setDate(startOfWeek.getDate() - weekday);
+  const startOfMonth = new Date(startOfToday);
+  startOfMonth.setDate(1);
+
+  const matchesTimeFilter = (note: Note) => {
+    if (!note.createdAt) return true;
+    const created = new Date(note.createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+
+    switch (activeFilter) {
+      case "Today":
+        return created >= startOfToday && created <= now;
+      case "This Week":
+        return created >= startOfWeek && created <= now;
+      case "This Month":
+        return created >= startOfMonth && created <= now;
+      default:
+        return true;
+    }
+  };
+
+  const matchesNotebookFilter = (note: Note) =>
+    !activeNotebook || note.notebook_id === activeNotebook;
+
+  const filteredNotes = notes.filter(
+    (note) => matchesNotebookFilter(note) && matchesTimeFilter(note)
+  );
+
+  const formatNoteDate = (iso?: string | null) => {
+    if (!iso) return null;
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
   return (
   <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
@@ -357,127 +423,146 @@ export default function Page() {
 
       {/* Notes Grid (always visible now) */}
       <>
-          {/* Notes Grid */}
-          {loading && notes.length === 0 ? (
-            <div className="mb-8">
-              <div className="skeleton h-8 w-32 mb-5 rounded"></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="card rounded-lg p-5 shadow-sm">
-                    <div className="skeleton h-6 w-3/4 mb-3 rounded"></div>
-                    <div className="skeleton h-4 w-full mb-2 rounded"></div>
-                    <div className="skeleton h-4 w-5/6 mb-2 rounded"></div>
-                    <div className="skeleton h-4 w-4/6 mb-4 rounded"></div>
-                    <div className="flex gap-2 mb-3">
-                      <div className="skeleton h-5 w-16 rounded"></div>
-                      <div className="skeleton h-5 w-16 rounded"></div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="skeleton h-4 w-12 rounded"></div>
-                      <div className="flex gap-3">
-                        <div className="skeleton h-4 w-4 rounded"></div>
-                        <div className="skeleton h-4 w-4 rounded"></div>
+        {(() => {
+          if (loading && notes.length === 0) {
+            return (
+              <div className="mb-8">
+                <div className="skeleton h-8 w-32 mb-5 rounded"></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="card rounded-lg p-5 shadow-sm">
+                      <div className="skeleton h-6 w-3/4 mb-3 rounded"></div>
+                      <div className="skeleton h-4 w-full mb-2 rounded"></div>
+                      <div className="skeleton h-4 w-5/6 mb-2 rounded"></div>
+                      <div className="skeleton h-4 w-4/6 mb-4 rounded"></div>
+                      <div className="flex gap-2 mb-3">
+                        <div className="skeleton h-5 w-16 rounded"></div>
+                        <div className="skeleton h-5 w-16 rounded"></div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : notes.length > 0 ? (
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-xl font-semibold text-primary tracking-tight">All Notes</h2>
-                <div className="text-sm text-secondary">{notes.filter(n => !activeNotebook || n.notebook_id === activeNotebook).length} notes</div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {notes.filter(n => !activeNotebook || n.notebook_id === activeNotebook).map((note, idx) => (
-                  <div
-                    key={note.id}
-                    className="card rounded-xl p-5 shadow-sm cursor-default group anim-slide-up card-hover gpu-accelerate relative overflow-hidden"
-                    style={{ animationDelay: `${idx * 60}ms` }}
-                  >
-                    {/* Subtle gradient overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-[var(--github-accent)]/0 to-[var(--github-accent)]/0 group-hover:from-[var(--github-accent)]/5 group-hover:to-transparent transition-all duration-300 pointer-events-none rounded-xl"></div>
-                    
-                    <div className="relative z-10">
-                      <h3 className="font-semibold text-lg mb-2 truncate text-primary group-hover:text-[var(--github-accent)] transition-colors">{note.title}</h3>
-                      <p className="text-secondary line-clamp-3 mb-4 text-sm leading-relaxed">
-                        {note.content || "No content"}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {note.notebook_name && (
-                          <span className="text-[10px] px-2.5 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">{note.notebook_name}</span>
-                        )}
-                        {note.tags?.slice(0,4).map(t => (
-                          <span key={t.name} className="text-[10px] px-2.5 py-1 rounded-full bg-surface border border-default text-secondary hover:border-[var(--github-accent)] transition-colors">{t.name}</span>
-                        ))}
-                        {note.tags && note.tags.length > 4 && (
-                          <span className="text-[10px] px-2.5 py-1 rounded-full bg-surface border border-default text-secondary">+{note.tags.length - 4}</span>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center mt-auto pt-2 border-t border-default/50">
-                        <div className="text-xs font-medium text-secondary flex items-center gap-1.5">
-                          {note.time && (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>{note.time}</span>
-                            </>
-                          )}
-                        </div>
-                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => selectNote(note)}
-                            className="p-1.5 rounded-md text-secondary hover:text-[var(--github-accent)] hover:bg-[var(--github-accent)]/10 transition-smooth"
-                            title="Edit note"
-                          >
-                            <PencilSquareIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteNote(note.id)}
-                            className="p-1.5 rounded-md text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
-                            title="Delete note"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
+                      <div className="flex justify-between items-center">
+                        <div className="skeleton h-4 w-12 rounded"></div>
+                        <div className="flex gap-3">
+                          <div className="skeleton h-4 w-4 rounded"></div>
+                          <div className="skeleton h-4 w-4 rounded"></div>
                         </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          if (notes.length > 0) {
+            return (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-xl font-semibold text-primary tracking-tight">All Notes</h2>
+                  <div className="text-sm text-secondary">{filteredNotes.length} notes</div>
+                </div>
+                {filteredNotes.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {filteredNotes.map((note, idx) => (
+                      <div
+                        key={note.id}
+                        onClick={() => selectNote(note)}
+                        className="group relative card rounded-2xl p-5 shadow-lg cursor-pointer anim-slide-up transition-transform duration-200 hover:-translate-y-1 hover:shadow-2xl overflow-hidden"
+                        style={{ animationDelay: `${idx * 60}ms` }}
+                      >
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[var(--github-accent)]/0 to-[var(--github-accent)]/0 opacity-0 group-hover:opacity-100 group-hover:from-[var(--github-accent)]/10 group-hover:to-transparent transition-all" />
+                        <div className="relative z-10 flex flex-col gap-3">
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <h3 className="font-semibold text-lg text-primary truncate transition-colors group-hover:text-[var(--github-accent)]">{note.title}</h3>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNote(note.id);
+                                }}
+                                className="p-1 rounded-md text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth opacity-0 group-hover:opacity-100"
+                                title="Delete note"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <p className="text-secondary line-clamp-3 text-sm leading-relaxed">{note.content || "No content"}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {note.notebook_name && (
+                              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">{note.notebook_name}</span>
+                            )}
+                            {note.tags?.slice(0, 4).map((t) => (
+                              <span
+                                key={t.name}
+                                className="text-[10px] px-2.5 py-1 rounded-full bg-surface border border-default text-secondary hover:border-[var(--github-accent)] transition-colors"
+                              >
+                                {t.name}
+                              </span>
+                            ))}
+                            {note.tags && note.tags.length > 4 && (
+                              <span className="text-[10px] px-2.5 py-1 rounded-full bg-surface border border-dashed border-default text-secondary">
+                                +{note.tags.length - 4}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-secondary/80 pt-2 border-t border-default/40 gap-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                              {formatNoteDate(note.createdAt) && (
+                                <span className="flex items-center gap-1.5">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6" />
+                                  </svg>
+                                  <span>{formatNoteDate(note.createdAt)}</span>
+                                </span>
+                              )}
+                              {note.time && (
+                                <span className="flex items-center gap-1.5">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>{note.time}</span>
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewing(note);
+                              }}
+                              className="text-[11px] font-semibold text-[var(--github-accent)] hover:underline"
+                            >
+                              Quick preview
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-            </div>
-          ) : (
-            // Empty state
+                ) : (
+                  <div className="card rounded-2xl p-8 text-center border border-dashed border-default text-secondary">
+                    <p className="font-medium text-primary mb-2">No notes match this filter</p>
+                    <p className="text-sm">Try switching the timeframe or notebook selection to see other notes.</p>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          // Empty state
+          return (
             <div className="flex flex-col items-center justify-center py-24 anim-fade-in">
               <div className="w-24 h-24 bg-gradient-to-br from-surface to-[var(--github-border)]/30 border-2 border-default rounded-2xl flex items-center justify-center mb-6 text-secondary shadow-lg">
                 <DocumentTextIcon className="w-12 h-12" />
               </div>
               <h3 className="text-3xl font-bold text-primary mb-3 tracking-tight">No notes yet</h3>
               <p className="text-secondary mb-8 text-center max-w-md leading-relaxed">Start capturing your ideas and thoughts with CyberiaTech's modern note-taking experience</p>
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center gap-2.5 px-6 py-3 btn-primary font-semibold rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35"
-              >
+              <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2.5 px-6 py-3 btn-primary font-semibold rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35">
                 <PlusIcon className="w-5 h-5" />
                 <span>Create Your First Note</span>
               </button>
             </div>
-            <h3 className="text-2xl font-semibold text-primary mb-3 tracking-tight">
-              No notes yet
-            </h3>
-            <p className="text-secondary mb-8 text-center max-w-sm">
-              Create your first note to get started with CyberiaTech
-            </p>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="fixed bottom-6 md:bottom-8 right-6 md:right-8 w-14 h-14 md:w-16 md:h-16 rounded-full btn-primary text-white flex items-center justify-center shadow-2xl transition-smooth pulse-button hover:scale-110 active:scale-95 z-50"
-              title="Create new note"
-            >
-              <PlusIcon className="w-6 h-6 md:w-7 md:h-7" />
-            </button>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Create Note Button */}
         {notes.length > 0 && (
@@ -489,6 +574,94 @@ export default function Page() {
           </button>
         )}
       </>
+
+      {/* Quick preview overlay */}
+      {previewing && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setPreviewing(null)}
+        >
+          <div
+            className="card relative max-w-2xl w-full rounded-3xl p-8 shadow-2xl anim-fade-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-6 mb-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-secondary/70 mb-1">
+                  Quick Preview
+                </p>
+                <h3 className="text-2xl font-semibold text-primary leading-tight">
+                  {previewing.title || "Untitled note"}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewing(null)}
+                className="text-sm text-secondary hover:text-primary px-3 py-1 rounded-full hover:bg-[var(--github-border)]/40 transition-smooth"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-secondary leading-relaxed text-[15px] whitespace-pre-line mb-6 max-h-60 overflow-auto pr-1">
+              {previewing.content || "No content"}
+            </p>
+            <div className="flex flex-wrap gap-2 mb-6">
+              {previewing.notebook_name && (
+                <span className="text-[11px] px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">
+                  {previewing.notebook_name}
+                </span>
+              )}
+              {previewing.tags?.map((tag) => (
+                <span
+                  key={tag.id ?? tag.name}
+                  className="text-[11px] px-3 py-1 rounded-full bg-surface border border-default text-secondary"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="text-xs text-secondary/80 flex flex-wrap items-center gap-3">
+                {formatNoteDate(previewing.createdAt) && (
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6" />
+                    </svg>
+                    <span>{formatNoteDate(previewing.createdAt)}</span>
+                  </span>
+                )}
+                {previewing.time && (
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{previewing.time}</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPreviewing(null)}
+                  className="px-4 py-2 rounded-lg border border-default text-sm font-medium text-secondary hover:text-primary"
+                >
+                  Keep browsing
+                </button>
+                <button
+                  onClick={() => {
+                    const noteToOpen = previewing;
+                    setPreviewing(null);
+                    if (noteToOpen) {
+                      selectNote(noteToOpen);
+                    }
+                  }}
+                  className="px-5 py-2 rounded-lg bg-[var(--github-accent)] text-white text-sm font-semibold shadow-lg hover:shadow-xl transition-smooth"
+                >
+                  Open full note
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {showToast && (

@@ -124,7 +124,7 @@ export default function CreateNoteModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-6">
           <div>
             <input
               type="text"
@@ -138,42 +138,7 @@ export default function CreateNoteModal({
           </div>
 
 
-          <textarea
-            placeholder="Write your note here..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full min-h-[250px] text-primary bg-transparent resize-none outline-none border-none focus:ring-0 leading-relaxed placeholder:text-secondary"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(99, 110, 123, 0.1) 1px, transparent 1px)",
-              backgroundSize: "100% 28px",
-              lineHeight: "28px",
-            }}
-          />
-
-          {/* Notebook selector */}
-          {notebooks.length > 0 && (
-            <div className="mt-4">
-              <label className="block text-xs font-semibold tracking-wide text-secondary mb-1">
-                Notebook
-              </label>
-              <select
-                value={notebookId ?? ""}
-                onChange={(e) =>
-                  setNotebookId(
-                    e.target.value ? parseInt(e.target.value, 10) : null
-                  )
-                }
-                className="w-full bg-surface border border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/50"
-              >
-                <option value="">No notebook</option>
-                {notebooks.map((nb) => (
-                  <option key={nb.id} value={nb.id}>
-                    {nb.name}
-                  </option>
-                ))}
-
-          <div className="relative">
+          <div className="relative rounded-2xl bg-surface/40 border border-default/60 px-4 py-3 shadow-inner">
             <textarea
               placeholder="Start writing your thoughts..."
               value={content}
@@ -186,8 +151,8 @@ export default function CreateNoteModal({
               }}
             />
             {!content && (
-              <div className="absolute top-8 left-0 text-secondary/40 pointer-events-none text-sm">
-                <p>✨ Tips:</p>
+              <div className="absolute top-8 left-8 text-secondary/40 pointer-events-none text-sm">
+                <p className="font-semibold">✨ Tips:</p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
                   <li>Use Ctrl+Enter to save quickly</li>
                   <li>Add tags for better organization</li>
@@ -206,56 +171,63 @@ export default function CreateNoteModal({
                 className="w-full bg-surface border-2 border-default rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[var(--github-accent)] focus:ring-2 focus:ring-[var(--github-accent)]/20 transition-smooth cursor-pointer"
               >
                 <option value="">📋 No notebook</option>
-                {notebooks.map(nb => <option key={nb.id} value={nb.id}>📔 {nb.name}</option>)}
+                {notebooksList.map(nb => <option key={nb.id} value={nb.id}>📔 {nb.name}</option>)}
 
               </select>
             </div>
           )}
 
-          {/* Tags input */}
-          <div>
-            <label className="block text-xs font-bold tracking-wider text-secondary mb-2 uppercase">Tags</label>
-            <div className="min-h-[48px] p-3 bg-surface border-2 border-default rounded-lg focus-within:border-[var(--github-accent)] focus-within:ring-2 focus-within:ring-[var(--github-accent)]/20 transition-smooth">
-              <div className="flex flex-wrap gap-2 mb-2">
-                {tags.map(t => (
-                  <span key={t} className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[var(--github-accent)]/15 to-[var(--github-accent)]/10 text-[var(--github-accent)] text-xs font-medium flex items-center gap-2 border border-[var(--github-accent)]/20 hover:border-[var(--github-accent)]/40 transition-smooth">
-                    <span>🏷️ {t}</span>
-                    <button type="button" onClick={() => removeTag(t)} className="hover:text-[var(--github-danger)] transition-colors" aria-label="Remove tag">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </span>
-                ))}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Tags input */}
+            <div>
+              <label className="block text-xs font-bold tracking-wider text-secondary mb-2 uppercase">Tags</label>
+              <div className="min-h-[48px] p-3 bg-surface border-2 border-default rounded-lg focus-within:border-[var(--github-accent)] focus-within:ring-2 focus-within:ring-[var(--github-accent)]/20 transition-smooth">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {tags.map(t => (
+                    <span key={t} className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[var(--github-accent)]/15 to-[var(--github-accent)]/10 text-[var(--github-accent)] text-xs font-medium flex items-center gap-2 border border-[var(--github-accent)]/20 hover:border-[var(--github-accent)]/40 transition-smooth">
+                      <span>🏷️ {t}</span>
+                      <button type="button" onClick={() => removeTag(t)} className="hover:text-[var(--github-danger)] transition-colors" aria-label="Remove tag">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKey}
+                  placeholder={tags.length ? 'Add another tag...' : 'Add tags (press Enter or comma)'}
+                  className="w-full bg-transparent outline-none text-sm text-primary placeholder:text-secondary/60"
+                />
               </div>
-              <input
-                type="text"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={handleTagKey}
-                placeholder={tags.length ? 'Add another tag...' : 'Add tags (press Enter or comma)'}
-                className="w-full bg-transparent outline-none text-sm text-primary placeholder:text-secondary/60"
-              />
             </div>
-          </div>
 
-          {/* Word count */}
-          <div className="flex items-center justify-between p-4 bg-surface/50 rounded-lg border border-default/50">
-            <div className="flex items-center gap-4 text-xs text-secondary">
-              <div className="flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span className="font-medium">{wordCount}</span>
-                <span>{wordCount === 1 ? 'word' : 'words'}</span>
-              </div>
-              <div className="w-px h-4 bg-default"></div>
-              <div className="flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                </svg>
-                <span className="font-medium">{characterCount}</span>
-                <span>{characterCount === 1 ? 'character' : 'characters'}</span>
+            {/* Word count */}
+            <div className="p-4 bg-surface/60 rounded-lg border border-default/60 shadow-inner flex flex-col gap-3">
+              <span className="text-xs font-bold tracking-wider text-secondary uppercase">Live stats</span>
+              <div className="flex items-center justify-between text-sm text-primary">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div>
+                    <p className="text-lg font-semibold leading-tight">{wordCount}</p>
+                    <p className="text-xs text-secondary">{wordCount === 1 ? 'word' : 'words'}</p>
+                  </div>
+                </div>
+                <div className="w-px h-10 bg-default/70" />
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <div>
+                    <p className="text-lg font-semibold leading-tight">{characterCount}</p>
+                    <p className="text-xs text-secondary">{characterCount === 1 ? 'character' : 'characters'}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
