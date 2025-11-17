@@ -8,12 +8,13 @@ function sign(user_id) {
 
 exports.register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) return res.status(400).json({ error: 'username, email, password required' });
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
     const existing = await pool.query('SELECT user_id FROM users WHERE email=$1', [email]);
     if (existing.rowCount) return res.status(409).json({ error: 'email already used' });
     const hash = await bcrypt.hash(password, 10);
-    const ins = await pool.query('INSERT INTO users (username, email, password_hash) VALUES ($1,$2,$3) RETURNING user_id, username, email, created_at', [username, email, hash]);
+    const derivedUsername = (email.split('@')[0] || 'user').slice(0, 100);
+    const ins = await pool.query('INSERT INTO users (username, email, password_hash) VALUES ($1,$2,$3) RETURNING user_id, username, email, created_at', [derivedUsername, email, hash]);
     const token = sign(ins.rows[0].user_id);
     res.status(201).json({ token, user: ins.rows[0] });
   } catch (e) {
