@@ -6,6 +6,7 @@ const notesRouter = require('./routes/notes');
 const authRouter = require('./routes/auth');
 const notebooksRouter = require('./routes/notebooks');
 const tagsRouter = require('./routes/tags');
+const walletRouter = require('./routes/wallet');
 const authMiddleware = require('./middleware/auth');
 const pool = require('./db');
 const noteModel = require('./models/noteModel');
@@ -44,6 +45,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/notes', authMiddleware, notesRouter);
 app.use('/api/notebooks', authMiddleware, notebooksRouter);
 app.use('/api/tags', authMiddleware, tagsRouter);
+app.use('/api/wallet', authMiddleware, walletRouter);
 
 // Test DB connection on startup
 (async () => {
