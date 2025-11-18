@@ -1,263 +1,162 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useMemo } from "react";
 import {
-  CheckCircleIcon,
+  ArrowPathIcon,
+  ClockIcon,
   ExclamationTriangleIcon,
+  ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
 import { useWallet } from "../contexts/WalletContext";
 
+const TX_EXPLORER_URL: Record<string, string> = {
+  mainnet: "https://cardanoscan.io/transaction/",
+  preprod: "https://preprod.cardanoscan.io/transaction/",
+  preview: "https://preview.cardanoscan.io/transaction/",
+};
+
+const ADDRESS_EXPLORER_URL: Record<string, string> = {
+  mainnet: "https://cardanoscan.io/address/",
+  preprod: "https://preprod.cardanoscan.io/address/",
+  preview: "https://preview.cardanoscan.io/address/",
+};
+
 export default function ManualWalletPanel() {
   const {
+    address,
     linkedWallet,
-    accountSyncing,
-    linkWalletManually,
-    relaySignedTransaction,
-    browserMnemonic,
-    browserAddress,
-    clearBrowserMnemonic,
+    connectedWallet,
+    config,
+    transactions,
+    transactionsLoading,
+    transactionsError,
+    loadTransactions,
   } = useWallet();
-  const [manualLabel, setManualLabel] = useState(linkedWallet?.wallet_label || "");
-  const [manualAddress, setManualAddress] = useState(
-    linkedWallet?.wallet_address || browserAddress || ""
-  );
-  const [manualNetwork, setManualNetwork] = useState(
-    linkedWallet?.wallet_network || "preprod"
-  );
-  const [manualStatus, setManualStatus] = useState<string | null>(null);
-  const [manualError, setManualError] = useState<string | null>(null);
-  const [signedCbor, setSignedCbor] = useState("");
-  const [relayHash, setRelayHash] = useState<string | null>(null);
-  const [relayError, setRelayError] = useState<string | null>(null);
-  const [relayLoading, setRelayLoading] = useState(false);
-  const [showMnemonic, setShowMnemonic] = useState(false);
 
-  useEffect(() => {
-    if (!linkedWallet) return;
-    setManualLabel(linkedWallet.wallet_label || "");
-    setManualAddress(linkedWallet.wallet_address || "");
-    setManualNetwork(linkedWallet.wallet_network || "preprod");
-  }, [linkedWallet]);
+  const activeAddress = address || linkedWallet?.wallet_address || null;
+  const network = (linkedWallet?.wallet_network || config?.network || "preview").toLowerCase();
+  const explorerBase = TX_EXPLORER_URL[network] || TX_EXPLORER_URL.preview;
+  const explorerAddressBase = ADDRESS_EXPLORER_URL[network] || ADDRESS_EXPLORER_URL.preview;
+  const subtitle = connectedWallet
+    ? "History synced from your Lace sidebar session."
+    : "Use the Lace link in the sidebar to connect and populate history.";
+  const recentTransactions = useMemo(() => transactions.slice(0, 10), [transactions]);
 
-  useEffect(() => {
-    if (browserAddress && !linkedWallet?.wallet_address) {
-      setManualAddress(browserAddress);
-    }
-  }, [browserAddress, linkedWallet]);
-
-  const handleManualLink = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setManualStatus(null);
-    setManualError(null);
-    try {
-      await linkWalletManually({
-        address: manualAddress,
-        label: manualLabel || null,
-        network: manualNetwork,
-      });
-      setManualStatus(
-        "Address key saved. Balance tools will rely on this entry."
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to link address";
-      setManualError(message);
-    }
-  };
-
-  const handleManualSubmit = async () => {
-    setRelayError(null);
-    setRelayHash(null);
-    const trimmed = signedCbor.trim();
-    if (!trimmed) {
-      setRelayError("Paste the signed CBOR payload before submitting");
-      return;
-    }
-    try {
-      setRelayLoading(true);
-      const { txHash } = await relaySignedTransaction(trimmed);
-      setRelayHash(txHash || null);
-      setSignedCbor("");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Relay failed";
-      setRelayError(message);
-    } finally {
-      setRelayLoading(false);
+  const handleRefresh = () => {
+    if (activeAddress) {
+      loadTransactions(activeAddress).catch(() => null);
     }
   };
 
   return (
     <section className="card rounded-2xl border border-default bg-[var(--github-bg-secondary)]/35 p-5 space-y-5">
-      <div className="space-y-1">
+      <header className="space-y-1">
         <p className="text-sm font-semibold text-primary flex items-center gap-2">
-          Manual Wallet Workflow
+          Lace transaction history
         </p>
-        <p className="text-xs text-secondary">
-          Prefinals rubric requires real addresses. Store your actual bech32 key and relay signed CBOR from this page.
+        <p className="text-xs text-secondary">{subtitle}</p>
+        <p className="text-[11px] text-secondary/70">
+          We pull the last 10 submissions seen by Blockfrost for your linked address.
         </p>
-        <p className="text-[11px] text-[var(--github-danger)]/90">
-          Testnet only. The mnemonic never leaves this browser—clear it before sharing devices.
-        </p>
-      </div>
+      </header>
 
-      <div className="rounded-xl border border-dashed border-[var(--github-accent)]/40 bg-[var(--github-accent)]/5 p-4 text-xs space-y-2">
-        {browserMnemonic ? (
-          <>
-            <div className="text-[var(--github-accent)] font-semibold flex items-center justify-between">
-              <span>Mnemonic detected in this browser</span>
-              <button
-                type="button"
-                className="text-[10px] uppercase tracking-wide underline"
-                onClick={() => setShowMnemonic((prev) => !prev)}
+      <div className="rounded-xl border border-default/70 bg-[var(--github-bg-secondary)]/60 p-4 text-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-secondary/70">
+              Active address
+            </p>
+            <p className="text-primary font-semibold">
+              {activeAddress ? truncate(activeAddress) : "No wallet linked"}
+            </p>
+            <p className="text-secondary/80 text-[11px]">Network: {network}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={!activeAddress || transactionsLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-default px-3 py-2 text-[12px] font-semibold text-secondary hover:text-primary disabled:opacity-50"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${transactionsLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+            {activeAddress && (
+              <a
+                className="inline-flex items-center gap-2 rounded-lg border border-default px-3 py-2 text-[12px] font-semibold text-[var(--github-accent)] hover:border-[var(--github-accent)]"
+                href={`${explorerAddressBase}${activeAddress}`}
+                target="_blank"
+                rel="noreferrer"
               >
-                {showMnemonic ? "Hide" : "Show"}
-              </button>
-            </div>
-            {showMnemonic && (
-              <div className="rounded-lg bg-surface border border-default px-3 py-2 font-mono text-[11px] text-primary break-words">
-                {browserMnemonic}
-              </div>
+                <ArrowTopRightOnSquareIcon className="h-4 w-4" /> Explorer
+              </a>
             )}
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                className="rounded-lg border border-default px-3 py-1.5 text-[11px] font-semibold text-secondary hover:text-primary"
-                onClick={() => {
-                  navigator.clipboard?.writeText(browserMnemonic).catch(() => {});
-                }}
-              >
-                Copy mnemonic
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-[var(--github-danger)]/50 px-3 py-1.5 text-[11px] font-semibold text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10"
-                onClick={clearBrowserMnemonic}
-              >
-                Clear from browser
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="text-[var(--github-danger)] font-semibold">
-            No mnemonic stored on this device. Re-register on this browser to rebuild the wallet.
-          </p>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-default/70 bg-[var(--github-bg-secondary)]/60 p-4 space-y-3">
-        <div className="flex items-center justify-between text-xs text-secondary">
-          <span className="font-semibold text-primary">Linked address</span>
-          {(linkedWallet?.wallet_address || browserAddress) ? (
-            <span className="text-primary">
-              {linkedWallet?.wallet_label ? `${linkedWallet.wallet_label} • ` : ""}
-              {truncate(linkedWallet?.wallet_address || browserAddress || "")}
-              {" "}
-              ({linkedWallet?.wallet_network || "preprod"})
-            </span>
-          ) : (
-            <span className="text-secondary/80">None yet — add yours below.</span>
-          )}
+          </div>
         </div>
 
-        <form onSubmit={handleManualLink} className="grid gap-3 text-xs">
-          <label className="font-semibold uppercase tracking-wide text-secondary">
-            Label (optional)
-            <input
-              type="text"
-              value={manualLabel}
-              onChange={(e) => setManualLabel(e.target.value)}
-              placeholder="Personal wallet"
-              className="mt-1 w-full rounded-lg border border-default bg-transparent px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/60"
-            />
-          </label>
-
-          <label className="font-semibold uppercase tracking-wide text-secondary">
-            Wallet Address Key
-            <input
-              type="text"
-              value={manualAddress}
-              onChange={(e) => setManualAddress(e.target.value)}
-              placeholder="addr1..."
-              className="mt-1 w-full rounded-lg border border-default bg-transparent px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/60"
-              required
-            />
-            <span className="mt-1 block text-[11px] font-normal normal-case text-secondary">
-              Paste the exact bech32 address you will fund. No mock data or sample strings.
-            </span>
-          </label>
-
-          <label className="font-semibold uppercase tracking-wide text-secondary">
-            Network
-            <select
-              value={manualNetwork}
-              onChange={(e) => setManualNetwork(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-default bg-[var(--github-bg-secondary)] px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/60"
-            >
-              <option value="preprod">Preprod (class sandbox)</option>
-              <option value="mainnet">Mainnet</option>
-              <option value="preview">Preview</option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            disabled={accountSyncing}
-            className="w-full rounded-lg bg-[var(--github-accent)]/90 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {accountSyncing ? "Saving…" : "Save Address Key"}
-          </button>
-        </form>
-
-        {manualStatus && <p className="text-xs text-emerald-400">{manualStatus}</p>}
-        {manualError && (
-          <p className="text-xs text-[var(--github-danger)] flex items-center gap-2">
-            <ExclamationTriangleIcon className="h-4 w-4" />
-            <span>{manualError}</span>
-          </p>
+        {!activeAddress && (
+          <div className="rounded-lg border border-dashed border-default/60 bg-[var(--github-bg-secondary)]/40 p-3 text-[11px] text-secondary">
+            Link Lace from the sidebar first. Once connected, history automatically appears here.
+          </div>
         )}
       </div>
 
-      <div className="rounded-xl border border-dashed border-default/80 bg-[var(--github-bg-secondary)]/45 p-4 space-y-3 text-xs">
-        <p className="text-sm font-semibold text-primary">Submit a signed transaction</p>
-        <ol className="space-y-1 text-secondary">
-          <li>
-            <span className="font-semibold text-primary">1.</span> Build the raw transaction using your CLI/tooling with the linked address as the signer.
-          </li>
-          <li>
-            <span className="font-semibold text-primary">2.</span> Sign it offline with your actual payment signing key.
-          </li>
-          <li>
-            <span className="font-semibold text-primary">3.</span> Paste the resulting CBOR hex below and submit. We relay it straight to Blockfrost.
-          </li>
-        </ol>
-
-        {relayHash && (
-          <div className="text-emerald-400 flex items-center gap-2">
-            <CheckCircleIcon className="h-4 w-4" />
-            <span>Relayed tx: {truncate(relayHash)}</span>
-          </div>
-        )}
-        {relayError && (
-          <div className="text-[var(--github-danger)] flex items-center gap-2">
-            <ExclamationTriangleIcon className="h-4 w-4" />
-            <span>{relayError}</span>
-          </div>
-        )}
-
-        <textarea
-          className="mt-1 w-full rounded-lg border border-default bg-transparent px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/60"
-          rows={4}
-          placeholder="Signed transaction CBOR hex"
-          value={signedCbor}
-          onChange={(e) => setSignedCbor(e.target.value)}
-        />
-
-        <button
-          onClick={handleManualSubmit}
-          disabled={relayLoading}
-          className="w-full rounded-lg bg-[var(--github-accent)]/90 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {relayLoading ? "Relaying…" : "Submit Signed Transaction"}
-        </button>
+      <div className="rounded-xl border border-dashed border-default/70 bg-[var(--github-bg-secondary)]/50">
+        <div className="flex items-center justify-between px-4 py-3 text-xs">
+          <p className="text-sm font-semibold text-primary">Recent transactions</p>
+          {activeAddress && (
+            <span className="text-secondary text-[11px]">
+              Showing {recentTransactions.length || 0} of 10
+            </span>
+          )}
+        </div>
+        <div className="divide-y divide-default/40">
+          {transactionsLoading && (
+            <div className="px-4 py-6 text-center text-secondary text-sm">
+              Loading history…
+            </div>
+          )}
+          {!transactionsLoading && transactionsError && (
+            <div className="px-4 py-4 text-[var(--github-danger)] text-sm flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-4 w-4" />
+              {transactionsError}
+            </div>
+          )}
+          {!transactionsLoading && !transactionsError && recentTransactions.length === 0 && (
+            <div className="px-4 py-6 text-center text-secondary text-sm">
+              No transactions yet. Send ADA from the Lace panel to populate history.
+            </div>
+          )}
+          {!transactionsLoading && !transactionsError && recentTransactions.length > 0 &&
+            recentTransactions.map((tx) => (
+              <div key={tx.tx_hash} className="px-4 py-3 text-xs flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-primary flex items-center gap-1">
+                    {truncate(tx.tx_hash)}
+                  </p>
+                  <p className="text-secondary text-[11px] flex items-center gap-1">
+                    <ClockIcon className="h-3.5 w-3.5" />
+                    {formatTimestamp(tx.block_time)}
+                  </p>
+                </div>
+                <div className="text-right text-[11px] text-secondary/80 space-y-1">
+                  <div>
+                    <p>Block #{tx.block_height}</p>
+                    <p>Index {tx.tx_index}</p>
+                  </div>
+                  <a
+                    href={`${explorerBase}${tx.tx_hash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[var(--github-accent)] hover:underline"
+                  >
+                    View
+                    <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            ))}
+        </div>
       </div>
     </section>
   );
@@ -267,4 +166,14 @@ function truncate(value: string) {
   if (!value) return "--";
   if (value.length <= 18) return value;
   return `${value.slice(0, 10)}…${value.slice(-6)}`;
+}
+
+function formatTimestamp(unixSeconds?: number) {
+  if (!unixSeconds) return "--";
+  try {
+    const date = new Date(unixSeconds * 1000);
+    return date.toLocaleString();
+  } catch {
+    return "--";
+  }
 }

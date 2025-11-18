@@ -119,6 +119,23 @@ async function getAddressUtxos(address, { page = 1, count = 50 } = {}) {
   };
 }
 
+async function getAddressTransactions(address, { page = 1, count = 20 } = {}) {
+  if (!address) {
+    throw new Error('Wallet address is required.');
+  }
+  const safeCount = Math.min(Math.max(count, 1), 50);
+  const query = `?page=${page}&count=${safeCount}&order=desc`;
+  const transactions = await requestBlockfrost(
+    `/addresses/${address}/transactions${query}`
+  );
+  return {
+    address,
+    page,
+    count: safeCount,
+    transactions,
+  };
+}
+
 async function submitTransaction(cborHex) {
   if (!cborHex) {
     throw new Error('Transaction CBOR is required.');
@@ -145,5 +162,6 @@ module.exports = {
   getNetworkConfig,
   getAddressInfo,
   getAddressUtxos,
+  getAddressTransactions,
   submitTransaction,
 };

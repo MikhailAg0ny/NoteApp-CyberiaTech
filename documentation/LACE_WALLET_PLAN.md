@@ -78,8 +78,8 @@
 >    - When connected, show states like `"Lace connected"`, `"Address linked to account"`, etc.
 >
 > 3. **Manual Panel / Notes Page**
->    - Manual fallback should remain, but the first/primary instructions should encourage Lace connection.
->    - If the user has a linked address (from Lace) display it as read-only info in `ManualWalletPanel.tsx`.
+>    - Manual fallback controls move into the Lace connector; the panel on Notes now spotlights transaction history.
+>    - `ManualWalletPanel.tsx` should list the latest Blockfrost transactions for the linked Lace address with explorer shortcuts.
 >    - Remove copy about `localStorage` mnemonics entirely once Lace flow is live.
 >
 > 4. **Registration + Settings**

@@ -52,8 +52,8 @@
   - If so, derive the bech32 address and expose it as the "manual" wallet.
   - Optionally still support CIP-30 connect for extra credit; manual mode remains the baseline.
 
-### 3. Manual Send Component
-- `ManualWalletPanel.tsx` already surfaces address + CBOR relay.
+### 3. Manual Send Component *(legacy)*
+- `ManualWalletPanel.tsx` originally surfaced address + CBOR relay. In the Lace-focused build this component now renders transaction history pulled from the connected wallet; use the sidebar connector for any remaining manual linking.
 - Extend it to:
   - Auto-fill the linked address from the user profile (`user.cardano_address`).
   - Provide a "Load mnemonic from this browser" button that reminds users where the seed resides.

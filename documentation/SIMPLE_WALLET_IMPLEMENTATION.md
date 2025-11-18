@@ -57,9 +57,8 @@ Mark each box as you proceed so graders can tell which portion of the simplified
 2. **Wallet context (`src/app/contexts/WalletContext.tsx`)**
    - Add helpers to detect/load the mnemonic from storage and derive the same address for client display.
    - Expose flags like `hasBrowserMnemonic` so UI components know whether to show manual actions.
-3. **Manual wallet UI (`ManualWalletPanel.tsx`)**
-   - Autoload the saved `cardano_address` for the logged-in user.
-   - Provide actions to rebuild a signed transaction using the mnemonic or accept a pre-signed CBOR payload, then send it through `/api/wallet/submit`.
+3. **Manual wallet UI (`ManualWalletPanel.tsx`)** *(legacy)*
+   - This panel has been repurposed in the Lace build to show recent transaction history for the linked address. Manual linking actions now live inside the Wallet connector sidebar.
 4. **Notes page integration (`src/app/page.tsx`)**
    - Keep CIP-30-specific prompts hidden unless a browser wallet is actually connected.
    - Highlight the manual workflow as the default path and show status badges for mnemonic presence.

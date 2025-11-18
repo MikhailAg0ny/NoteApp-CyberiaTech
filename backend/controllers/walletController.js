@@ -41,6 +41,20 @@ exports.getUtxos = async (req, res) => {
   }
 };
 
+exports.getTransactions = async (req, res) => {
+  try {
+    const { address, page, count } = req.body || {};
+    if (!address) {
+      return res.status(400).json({ error: 'address is required' });
+    }
+    const data = await cardanoService.getAddressTransactions(address, { page, count });
+    res.json(data);
+  } catch (err) {
+    console.error('POST /api/wallet/transactions failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.submitTransaction = async (req, res) => {
   try {
     const { cbor } = req.body || {};

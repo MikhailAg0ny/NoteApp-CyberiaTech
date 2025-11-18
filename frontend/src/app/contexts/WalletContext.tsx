@@ -65,6 +65,14 @@ type RelaySignedTxResult = {
 
 type BlockfrostNetwork = ConstructorParameters<typeof Blockfrost>[0]["network"];
 
+type AddressTransaction = {
+  tx_hash: string;
+  tx_index: number;
+  block_height: number;
+  block_time: number;
+  block_slot?: number;
+};
+
 type ManualLinkArgs = {
   address: string;
   label?: string | null;
@@ -116,6 +124,9 @@ interface WalletContextValue {
   config: WalletConfig | null;
   linkedWallet: LinkedWalletRecord | null;
   accountSyncing: boolean;
+  transactions: AddressTransaction[];
+  transactionsLoading: boolean;
+  transactionsError: string | null;
   connectWallet: (walletKey?: string) => Promise<void>;
   disconnectWallet: () => void;
   unlinkWallet: () => Promise<void>;
@@ -125,6 +136,7 @@ interface WalletContextValue {
   submitAdaPayment: (args: SubmitAdaArgs) => Promise<{ txHash: string }>;
   relaySignedTransaction: (cbor: string) => Promise<RelaySignedTxResult>;
   refreshBalance: (customAddress?: string) => Promise<void>;
+  loadTransactions: (addressOverride?: string) => Promise<void>;
   browserMnemonic: string | null;
   browserAddress: string | null;
   clearBrowserMnemonic: () => void;
@@ -161,6 +173,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [accountSyncing, setAccountSyncing] = useState(false);
   const [browserMnemonic, setBrowserMnemonic] = useState<string | null>(null);
   const [browserAddress, setBrowserAddress] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<AddressTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const cardanoWasmRef = useRef<CardanoSerializationLib | null>(null);
   const walletApiRef = useRef<Cip30WalletApi | null>(null);
   const addressRef = useRef<string | null>(null);
@@ -301,6 +316,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
   }, []);
 
+  const loadTransactions = useCallback(async (addressOverride?: string) => {
+    if (!ENABLE_WALLET) return;
+    const targetAddress = addressOverride || addressRef.current;
+    if (!targetAddress) {
+      setTransactions([]);
+      return;
+    }
+    const token = getAuthToken();
+    if (!token) {
+      setTransactionsError("Please sign in to view history");
+      return;
+    }
+    setTransactionsLoading(true);
+    setTransactionsError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/wallet/transactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ address: targetAddress, count: 10 }),
+      });
+      if (!res.ok) {
+        throw new Error(`History fetch failed (${res.status})`);
+      }
+      const data = await res.json();
+      setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
+    } catch (err) {
+      setTransactionsError(
+        getErrorMessage(err, "Unable to load transaction history")
+      );
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mnemonic = localStorage.getItem("user_mnemonic");
@@ -312,6 +364,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setTimeout(() => refreshBalance(storedAddress), 0);
     }
   }, [linkedWallet?.wallet_address, refreshBalance]);
+
+  useEffect(() => {
+    if (address) {
+      loadTransactions(address);
+    } else {
+      setTransactions([]);
+    }
+  }, [address, loadTransactions]);
 
   const syncLinkedWallet = useCallback(async () => {
     if (!ENABLE_WALLET) return;
@@ -625,6 +685,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       config,
       linkedWallet,
       accountSyncing,
+      transactions,
+      transactionsLoading,
+      transactionsError,
       connectWallet,
       disconnectWallet,
       unlinkWallet,
@@ -634,6 +697,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       submitAdaPayment,
       relaySignedTransaction,
       refreshBalance,
+      loadTransactions,
       browserMnemonic,
       browserAddress,
       clearBrowserMnemonic,
@@ -646,11 +710,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       config,
       connectedWallet,
       error,
+      transactions,
+      transactionsLoading,
+      transactionsError,
       linkedWallet,
       isReady,
       loading,
       lovelace,
       refreshBalance,
+      loadTransactions,
       connectWallet,
       disconnectWallet,
       unlinkWallet,
