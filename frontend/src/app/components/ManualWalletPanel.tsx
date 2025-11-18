@@ -13,10 +13,13 @@ export default function ManualWalletPanel() {
     accountSyncing,
     linkWalletManually,
     relaySignedTransaction,
+    browserMnemonic,
+    browserAddress,
+    clearBrowserMnemonic,
   } = useWallet();
   const [manualLabel, setManualLabel] = useState(linkedWallet?.wallet_label || "");
   const [manualAddress, setManualAddress] = useState(
-    linkedWallet?.wallet_address || ""
+    linkedWallet?.wallet_address || browserAddress || ""
   );
   const [manualNetwork, setManualNetwork] = useState(
     linkedWallet?.wallet_network || "preprod"
@@ -27,6 +30,7 @@ export default function ManualWalletPanel() {
   const [relayHash, setRelayHash] = useState<string | null>(null);
   const [relayError, setRelayError] = useState<string | null>(null);
   const [relayLoading, setRelayLoading] = useState(false);
+  const [showMnemonic, setShowMnemonic] = useState(false);
 
   useEffect(() => {
     if (!linkedWallet) return;
@@ -34,6 +38,12 @@ export default function ManualWalletPanel() {
     setManualAddress(linkedWallet.wallet_address || "");
     setManualNetwork(linkedWallet.wallet_network || "preprod");
   }, [linkedWallet]);
+
+  useEffect(() => {
+    if (browserAddress && !linkedWallet?.wallet_address) {
+      setManualAddress(browserAddress);
+    }
+  }, [browserAddress, linkedWallet]);
 
   const handleManualLink = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,15 +94,64 @@ export default function ManualWalletPanel() {
         <p className="text-xs text-secondary">
           Prefinals rubric requires real addresses. Store your actual bech32 key and relay signed CBOR from this page.
         </p>
+        <p className="text-[11px] text-[var(--github-danger)]/90">
+          Testnet only. The mnemonic never leaves this browser—clear it before sharing devices.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-dashed border-[var(--github-accent)]/40 bg-[var(--github-accent)]/5 p-4 text-xs space-y-2">
+        {browserMnemonic ? (
+          <>
+            <div className="text-[var(--github-accent)] font-semibold flex items-center justify-between">
+              <span>Mnemonic detected in this browser</span>
+              <button
+                type="button"
+                className="text-[10px] uppercase tracking-wide underline"
+                onClick={() => setShowMnemonic((prev) => !prev)}
+              >
+                {showMnemonic ? "Hide" : "Show"}
+              </button>
+            </div>
+            {showMnemonic && (
+              <div className="rounded-lg bg-surface border border-default px-3 py-2 font-mono text-[11px] text-primary break-words">
+                {browserMnemonic}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="rounded-lg border border-default px-3 py-1.5 text-[11px] font-semibold text-secondary hover:text-primary"
+                onClick={() => {
+                  navigator.clipboard?.writeText(browserMnemonic).catch(() => {});
+                }}
+              >
+                Copy mnemonic
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-[var(--github-danger)]/50 px-3 py-1.5 text-[11px] font-semibold text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10"
+                onClick={clearBrowserMnemonic}
+              >
+                Clear from browser
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-[var(--github-danger)] font-semibold">
+            No mnemonic stored on this device. Re-register on this browser to rebuild the wallet.
+          </p>
+        )}
       </div>
 
       <div className="rounded-xl border border-default/70 bg-[var(--github-bg-secondary)]/60 p-4 space-y-3">
         <div className="flex items-center justify-between text-xs text-secondary">
           <span className="font-semibold text-primary">Linked address</span>
-          {linkedWallet?.wallet_address ? (
+          {(linkedWallet?.wallet_address || browserAddress) ? (
             <span className="text-primary">
-              {linkedWallet.wallet_label ? `${linkedWallet.wallet_label} • ` : ""}
-              {truncate(linkedWallet.wallet_address)} ({linkedWallet.wallet_network || "preprod"})
+              {linkedWallet?.wallet_label ? `${linkedWallet.wallet_label} • ` : ""}
+              {truncate(linkedWallet?.wallet_address || browserAddress || "")}
+              {" "}
+              ({linkedWallet?.wallet_network || "preprod"})
             </span>
           ) : (
             <span className="text-secondary/80">None yet — add yours below.</span>

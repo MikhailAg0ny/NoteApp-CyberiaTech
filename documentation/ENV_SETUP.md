@@ -15,8 +15,8 @@ This guide explains how to populate the secret environment files for the NoteApp
     PGPORT=5432
     PORT=5000
 
-   CARDANO_NETWORK=preprod
-   BLOCKFROST_API_URL=https://cardano-preprod.blockfrost.io/api/v0
+   CARDANO_NETWORK=preview
+   BLOCKFROST_API_URL=https://cardano-preview.blockfrost.io/api/v0
    BLOCKFROST_API_KEY=your_real_blockfrost_key
    ```
 3. Do **not** commit `backend/.env`; it is already ignored via the root `.gitignore`
@@ -26,9 +26,9 @@ This guide explains how to populate the secret environment files for the NoteApp
 2. Replace placeholders with real values:
    ```dotenv
    NEXT_PUBLIC_ENABLE_WALLET=true
-   NEXT_PUBLIC_CARDANO_NETWORK=preprod
-   NEXT_PUBLIC_BLOCKFROST_API_URL=https://cardano-preprod.blockfrost.io/api/v0
-   NEXT_PUBLIC_BLOCKFROST_PROJECT_ID=replace_with_blockfrost_project_id
+   NEXT_PUBLIC_CARDANO_NETWORK=preview
+   NEXT_PUBLIC_BLOCKFROST_API_URL=https://cardano-preview.blockfrost.io/api/v0
+   NEXT_PUBLIC_BLOCKFROST_PROJECT_ID=replace_with_preview_blockfrost_project_id
    NEXT_PUBLIC_API_BASE=http://localhost:5000
    ```
 3. Frontend `.env.local` is also gitignored.

@@ -90,7 +90,11 @@ export default function Page() {
     address: walletAddress,
     balanceAda: walletBalance,
     error: walletError,
+    browserMnemonic,
+    browserAddress,
+    linkedWallet,
   } = wallet;
+  const manualAddress = linkedWallet?.wallet_address || browserAddress || null;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -411,7 +415,20 @@ export default function Page() {
       )}
 
       {walletEnabled && (
-        <div className="mb-8">
+        <div className="mb-8 space-y-3">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-semibold">
+              Manual wallet mode active
+            </span>
+            <span
+              className={`px-3 py-1 rounded-full font-semibold ${browserMnemonic ? "bg-emerald-500/15 text-emerald-300" : "bg-[var(--github-danger)]/15 text-[var(--github-danger)]"}`}
+            >
+              {browserMnemonic ? "Mnemonic detected in this browser" : "Mnemonic missing – re-register here"}
+            </span>
+            <span className="px-3 py-1 rounded-full bg-surface border border-dashed border-default text-secondary font-semibold">
+              {manualAddress ? `Linked address: ${manualAddress.slice(0, 10)}…${manualAddress.slice(-6)}` : "No address on file"}
+            </span>
+          </div>
           <ManualWalletPanel />
         </div>
       )}

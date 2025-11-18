@@ -19,7 +19,7 @@ Wallet connectivity is now wired end-to-end: the backend proxies Blockfrost, and
 - Node.js ≥ 18 (matches Next.js 15 + latest Express requirements)
 - npm CLI
 - Cardano browser wallet (Nami, Eternl, or Flint) installed and unlocked
-- Blockfrost API key with access to the target network (`preprod` by default)
+- Blockfrost API key with access to the target network (`preview` by default)
 
 ## Step 1 – Configure Environment
 
@@ -33,8 +33,8 @@ Populate the real files (`backend/.env`, `frontend/.env.local`) using the templa
 Backend keys:
 
 ```dotenv
-CARDANO_NETWORK=preprod
-BLOCKFROST_API_URL=https://cardano-preprod.blockfrost.io/api/v0
+CARDANO_NETWORK=preview
+BLOCKFROST_API_URL=https://cardano-preview.blockfrost.io/api/v0
 BLOCKFROST_API_KEY=your_blockfrost_key
 ```
 
@@ -42,9 +42,9 @@ Frontend keys:
 
 ```dotenv
 NEXT_PUBLIC_ENABLE_WALLET=true
-NEXT_PUBLIC_CARDANO_NETWORK=preprod
-NEXT_PUBLIC_BLOCKFROST_API_URL=https://cardano-preprod.blockfrost.io/api/v0
-NEXT_PUBLIC_BLOCKFROST_PROJECT_ID=replace_with_blockfrost_project_id
+NEXT_PUBLIC_CARDANO_NETWORK=preview
+NEXT_PUBLIC_BLOCKFROST_API_URL=https://cardano-preview.blockfrost.io/api/v0
+NEXT_PUBLIC_BLOCKFROST_PROJECT_ID=replace_with_preview_blockfrost_project_id
 NEXT_PUBLIC_API_BASE=http://localhost:5000
 ```
 

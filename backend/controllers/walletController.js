@@ -4,7 +4,10 @@ const pool = require('../db');
 exports.getConfig = (req, res) => {
   try {
     const config = cardanoService.getNetworkConfig();
-    res.json(config);
+    res.json({
+      ...config,
+      preferredWallet: 'lace'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

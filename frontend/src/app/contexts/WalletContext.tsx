@@ -125,6 +125,9 @@ interface WalletContextValue {
   submitAdaPayment: (args: SubmitAdaArgs) => Promise<{ txHash: string }>;
   relaySignedTransaction: (cbor: string) => Promise<RelaySignedTxResult>;
   refreshBalance: (customAddress?: string) => Promise<void>;
+  browserMnemonic: string | null;
+  browserAddress: string | null;
+  clearBrowserMnemonic: () => void;
 }
 
 const WalletContext = createContext<WalletContextValue | undefined>(undefined);
@@ -156,6 +159,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [linkedWallet, setLinkedWallet] = useState<LinkedWalletRecord | null>(null);
   const [accountSyncing, setAccountSyncing] = useState(false);
+  const [browserMnemonic, setBrowserMnemonic] = useState<string | null>(null);
+  const [browserAddress, setBrowserAddress] = useState<string | null>(null);
   const cardanoWasmRef = useRef<CardanoSerializationLib | null>(null);
   const walletApiRef = useRef<Cip30WalletApi | null>(null);
   const addressRef = useRef<string | null>(null);
@@ -296,6 +301,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mnemonic = localStorage.getItem("user_mnemonic");
+    const storedAddress = localStorage.getItem("user_cardano_address");
+    setBrowserMnemonic(mnemonic);
+    setBrowserAddress(storedAddress);
+    if (storedAddress && !linkedWallet?.wallet_address) {
+      setAddress(storedAddress);
+      setTimeout(() => refreshBalance(storedAddress), 0);
+    }
+  }, [linkedWallet?.wallet_address, refreshBalance]);
+
   const syncLinkedWallet = useCallback(async () => {
     if (!ENABLE_WALLET) return;
     const token = getAuthToken();
@@ -322,14 +339,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setTimeout(() => refreshBalance(data.wallet.wallet_address), 0);
       } else {
         setLinkedWallet(null);
-        setAddress(null);
+        if (!browserAddress) {
+          setAddress(null);
+        }
       }
     } catch (err) {
       console.warn('syncLinkedWallet failed', err);
     } finally {
       setAccountSyncing(false);
     }
-  }, [refreshBalance]);
+  }, [refreshBalance, browserAddress]);
 
   const persistLinkedWallet = useCallback(
     async (addr: string, label?: string | null, networkOverride?: string | null) => {
@@ -446,12 +465,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     walletApiRef.current = null;
     setConnectedWallet(null);
     setError(null);
-    if (!linkedWallet?.wallet_address) {
+    if (!linkedWallet?.wallet_address && !browserAddress) {
       setAddress(null);
       setBalanceAda(null);
       setLovelace(null);
     }
-  }, [linkedWallet]);
+  }, [linkedWallet, browserAddress]);
 
   const unlinkWallet = useCallback(async () => {
     const token = getAuthToken();
@@ -474,7 +493,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       walletApiRef.current = null;
       setLinkedWallet(null);
       setConnectedWallet(null);
-      setAddress(null);
+      if (!browserAddress) {
+        setAddress(null);
+      }
       setBalanceAda(null);
       setLovelace(null);
       setError(null);
@@ -484,7 +505,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } finally {
       setAccountSyncing(false);
     }
-  }, []);
+  }, [browserAddress]);
+
+  const clearBrowserMnemonic = useCallback(() => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("user_mnemonic");
+    localStorage.removeItem("user_cardano_address");
+    setBrowserMnemonic(null);
+    setBrowserAddress(null);
+    if (!linkedWallet?.wallet_address) {
+      setAddress(null);
+    }
+  }, [linkedWallet]);
 
   const getWalletApi = useCallback(() => walletApiRef.current, []);
 
@@ -602,6 +634,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       submitAdaPayment,
       relaySignedTransaction,
       refreshBalance,
+      browserMnemonic,
+      browserAddress,
+      clearBrowserMnemonic,
     }),
     [
       address,
@@ -624,6 +659,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       linkWalletManually,
       submitAdaPayment,
       relaySignedTransaction,
+      browserMnemonic,
+      browserAddress,
+      clearBrowserMnemonic,
     ]
   );
 
