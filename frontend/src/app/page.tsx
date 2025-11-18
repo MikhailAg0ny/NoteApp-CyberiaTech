@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
+import ManualWalletPanel from "./components/ManualWalletPanel";
+import { useWallet } from "./contexts/WalletContext";
 
 type Note = {
   id: number;
@@ -23,30 +25,75 @@ type Note = {
   createdAt?: string | null;
 };
 
+type ApiNoteResponse = {
+  id: number;
+  title?: string | null;
+  content?: string | null;
+  notebook_id?: number | null;
+  notebook_name?: string | null;
+  tags?: { id?: number; name: string }[];
+  created_at?: string | null;
+};
+
+type NotebookFilterDetail = {
+  notebookId: number | null;
+};
+
+const mapApiNote = (apiNote: ApiNoteResponse): Note => {
+  const createdAt = apiNote.created_at ?? null;
+  return {
+    id: apiNote.id,
+    title: apiNote.title || "",
+    content: apiNote.content || "",
+    notebook_id: apiNote.notebook_id ?? null,
+    notebook_name: apiNote.notebook_name ?? null,
+    tags: apiNote.tags || [],
+    category: "Notes",
+    date: "Today",
+    time: createdAt
+      ? new Date(createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : undefined,
+    createdAt,
+  };
+};
+
+const getErrorMessage = (err: unknown) => {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return "An unexpected error occurred";
+};
+
 export default function Page() {
   // Starting with an empty notes array
   const [notes, setNotes] = useState<Note[]>([]);
   const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
     []
   );
-  const [tags, setTags] = useState<{ id: number; name: string }[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [previewing, setPreviewing] = useState<Note | null>(null);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [activeFilter, setActiveFilter] = useState("Today");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const wallet = useWallet();
+  const {
+    isEnabled: walletEnabled,
+    connectedWallet,
+    address: walletAddress,
+    balanceAda: walletBalance,
+    error: walletError,
+  } = wallet;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const userId =
-    typeof window !== "undefined" ? localStorage.getItem("user_id") : null; // retained for display if needed (not sent as param)
 
   const redirectToLogin = () => {
     if (typeof window !== "undefined") {
@@ -75,30 +122,11 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
-      const data = await res.json();
-      const mapped: Note[] = data.map((n: any) => {
-        const createdAt = n.created_at ?? null;
-        return {
-          id: n.id,
-          title: n.title || "",
-          content: n.content || "",
-          notebook_id: n.notebook_id ?? null,
-          notebook_name: n.notebook_name ?? null,
-          tags: n.tags || [],
-          category: "Notes",
-          date: "Today",
-          time: createdAt
-            ? new Date(createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : undefined,
-          createdAt,
-        };
-      });
+      const data = (await res.json()) as ApiNoteResponse[];
+      const mapped: Note[] = data.map(mapApiNote);
       setNotes(mapped);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -123,29 +151,9 @@ export default function Page() {
     } catch {}
   };
 
-  const fetchTags = async () => {
-    try {
-      if (!token) {
-        redirectToLogin();
-        return;
-      }
-      const res = await fetch(`${API_BASE}/api/tags`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        redirectToLogin();
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      setTags(data);
-    } catch {}
-  };
-
   useEffect(() => {
     fetchNotes();
     fetchNotebooks();
-    fetchTags();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,32 +185,16 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error("Create failed");
-      const created = await res.json();
-      const note: Note = {
-        id: created.id,
-        title: created.title,
-        content: created.content,
-        notebook_id: created.notebook_id ?? null,
-        notebook_name: created.notebook_name ?? null,
-        tags: created.tags || [],
-        category: "Notes",
-        date: "Today",
-        time: created.created_at
-          ? new Date(created.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : undefined,
-        createdAt: created.created_at ?? null,
-      };
+      const created = (await res.json()) as ApiNoteResponse;
+      const note = mapApiNote(created);
       setNotes((prev) => [note, ...prev]);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2600);
       // Open the newly created note in modal for viewing/editing
       setSelected(note);
       setIsNoteModalOpen(true);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -236,37 +228,18 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error("Update failed");
-      const updated = await res.json();
+      const updated = (await res.json()) as ApiNoteResponse;
+      const normalized = mapApiNote(updated);
       setNotes((prev) =>
         prev.map((n) =>
-          n.id === noteId
-            ? {
-                ...n,
-                title: updated.title,
-                content: updated.content,
-                notebook_id: updated.notebook_id ?? null,
-                notebook_name: updated.notebook_name ?? null,
-                tags: updated.tags || [],
-                createdAt: updated.created_at ?? n.createdAt ?? null,
-              }
-            : n
+          n.id === noteId ? { ...n, ...normalized } : n
         )
       );
       setSelected((prev) =>
-        prev && prev.id === noteId
-          ? {
-              ...prev,
-              title: updated.title,
-              content: updated.content,
-              notebook_id: updated.notebook_id ?? null,
-              notebook_name: updated.notebook_name ?? null,
-              tags: updated.tags || [],
-              createdAt: updated.created_at ?? prev.createdAt ?? null,
-            }
-          : prev
+        prev && prev.id === noteId ? { ...prev, ...normalized } : prev
       );
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -288,8 +261,8 @@ export default function Page() {
         setSelected(null);
         setIsNoteModalOpen(false);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -308,8 +281,9 @@ export default function Page() {
     const handleOpenSettings = () => setIsSettingsOpen(true);
     document.addEventListener("openCreateNoteModal", handleOpenCreateModal);
     document.addEventListener("openSettingsModal", handleOpenSettings);
-    const handleFilterNotebook = (e: any) => {
-      setActiveNotebook(e.detail?.notebookId ?? null);
+    const handleFilterNotebook = (event: Event) => {
+      const customEvent = event as CustomEvent<NotebookFilterDetail>;
+      setActiveNotebook(customEvent.detail?.notebookId ?? null);
     };
     document.addEventListener("filterNotebook", handleFilterNotebook);
 
@@ -420,6 +394,27 @@ export default function Page() {
           >Logout</button>
         </div>
       </div>
+
+      {walletEnabled && connectedWallet && walletAddress && (
+        <div className="mb-6 card rounded-2xl border border-dashed border-default bg-[var(--github-bg-secondary)]/40 p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-primary flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Wallet connected: {connectedWallet.label}
+          </p>
+          <p className="text-xs text-secondary">
+            {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)} · {walletBalance === null ? "--" : `${walletBalance.toFixed(2)} ADA`}
+          </p>
+          {walletError && (
+            <p className="text-xs text-[var(--github-danger)] mt-1">{walletError}</p>
+          )}
+        </div>
+      )}
+
+      {walletEnabled && (
+        <div className="mb-8">
+          <ManualWalletPanel />
+        </div>
+      )}
 
       {/* Notes Grid (always visible now) */}
       <>
@@ -555,7 +550,7 @@ export default function Page() {
                 <DocumentTextIcon className="w-12 h-12" />
               </div>
               <h3 className="text-3xl font-bold text-primary mb-3 tracking-tight">No notes yet</h3>
-              <p className="text-secondary mb-8 text-center max-w-md leading-relaxed">Start capturing your ideas and thoughts with CyberiaTech's modern note-taking experience</p>
+              <p className="text-secondary mb-8 text-center max-w-md leading-relaxed">Start capturing your ideas and thoughts with CyberiaTech&apos;s modern note-taking experience</p>
               <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2.5 px-6 py-3 btn-primary font-semibold rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35">
                 <PlusIcon className="w-5 h-5" />
                 <span>Create Your First Note</span>
