@@ -243,11 +243,14 @@ export default function Sidebar() {
                 <div key={nb.id} className="relative">
                   <button
                     onClick={() => selectNotebook(nb.id)}
-                    className="block w-full text-left px-4 py-2.5 text-sm rounded-lg ..."
+                    className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-all truncate relative overflow-hidden group ${
+                      activeNotebook === nb.id
+                        ? "bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white font-semibold shadow-lg shadow-[var(--github-accent)]/20"
+                        : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
+                    }`}
                     title={nb.name}
                   >
                     <div className="flex items-center justify-between gap-2.5 relative z-10">
-                      {/* <-- Put the inline edit input here */}
                       {editingId === nb.id ? (
                         <input
                           type="text"
@@ -264,8 +267,6 @@ export default function Sidebar() {
                       ) : (
                         <span className="truncate">{nb.name}</span>
                       )}
-
-                      {/* Ellipsis / dropdown trigger */}
                       <EllipsisVerticalIcon
                         className="w-4 h-4 cursor-pointer text-secondary hover:text-primary"
                         onClick={(e) => {
@@ -278,7 +279,7 @@ export default function Sidebar() {
                     </div>
                   </button>
 
-                  {/* Notebook dropdown menu for Edit/Delete */}
+                  {/* Dropdown Menu */}
                   {notebookDropdownOpen === nb.id && (
                     <div className="absolute right-0 mt-1 w-32 bg-surface border border-default rounded-lg shadow-lg z-50">
                       <button
