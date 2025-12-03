@@ -12,6 +12,7 @@ import {
 import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import CreateNotebookModal from "./CreateNoteBookModal";
+import ConfirmModal from "./ConfirmModal";
 
 interface Notebook {
   id: number;
@@ -32,6 +33,13 @@ export default function Sidebar() {
   const [tempName, setTempName] = useState("");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    open: boolean;
+    id: number | null;
+  }>({
+    open: false,
+    id: null,
+  });
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
   const token =
@@ -74,6 +82,18 @@ export default function Sidebar() {
     };
     fetchNotebooks();
   }, [token, API_BASE]);
+
+  // Listen for notebookCreated events from anywhere
+  useEffect(() => {
+    const handleNotebookCreated = (e: any) => {
+      const newNotebook = e.detail;
+      setNotebooks((prev) => [...prev, newNotebook]);
+    };
+
+    document.addEventListener("notebookCreated", handleNotebookCreated);
+    return () =>
+      document.removeEventListener("notebookCreated", handleNotebookCreated);
+  }, []);
 
   const openSettings = () => {
     document.dispatchEvent(new CustomEvent("openSettingsModal"));
@@ -156,36 +176,6 @@ export default function Sidebar() {
 
       {/* Navigation & Notebooks */}
       <nav className="flex-1 p-4 space-y-2 mt-2 relative z-10">
-        {/* Create Dropdown */}
-        <div className="mb-4 relative" ref={dropdownRef}>
-          {createDropdownOpen && (
-            <div className="absolute mt-1 w-full bg-surface border border-default rounded-lg shadow-lg z-50 transition-all duration-200 opacity-100 translate-y-0">
-              <button
-                className="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-[var(--github-accent)]/10 hover:scale-105 transition-transform duration-150"
-                onClick={() => {
-                  setCreateDropdownOpen(false);
-                  handleCreateNoteClick();
-                }}
-              >
-                <DocumentTextIcon className="w-4 h-4 text-[var(--github-accent)]" />
-                Create Note
-              </button>
-              <button
-                className="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-[var(--github-accent)]/10 hover:scale-105 transition-transform duration-150"
-                onClick={() => {
-                  if (!token) return;
-                  setCreateDropdownOpen(false);
-                  setShowNotebookModal(true);
-                }}
-                disabled={!token}
-              >
-                <PlusIcon className="w-4 h-4 text-[var(--github-accent)]" />
-                Create Notebook
-              </button>
-            </div>
-          )}
-        </div>
-
         {/* Quick Navigation */}
         <div className="space-y-1">
           {[
@@ -219,7 +209,7 @@ export default function Sidebar() {
             </div>
 
             {/* Scrollable Notebook List */}
-            <div className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
+            <div className="space-y-1 h-96 overflow-y-auto pr-2">
               <button
                 onClick={() => selectNotebook(null)}
                 className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-all relative overflow-hidden group ${
@@ -250,36 +240,64 @@ export default function Sidebar() {
               </button>
 
               {notebooks.map((nb) => (
-                <button
-                  key={nb.id}
-                  onClick={() => selectNotebook(nb.id)}
-                  className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-all truncate relative overflow-hidden group ${
-                    activeNotebook === nb.id
-                      ? "bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white font-semibold shadow-lg shadow-[var(--github-accent)]/20"
-                      : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-                  }`}
-                  title={nb.name}
-                >
-                  <div className="flex items-center gap-2.5 relative z-10">
-                    <svg
-                      className="w-4 h-4 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                <div key={nb.id} className="relative">
+                  <button
+                    onClick={() => selectNotebook(nb.id)}
+                    className="block w-full text-left px-4 py-2.5 text-sm rounded-lg ..."
+                    title={nb.name}
+                  >
+                    <div className="flex items-center justify-between gap-2.5 relative z-10">
+                      {/* <-- Put the inline edit input here */}
+                      {editingId === nb.id ? (
+                        <input
+                          type="text"
+                          value={tempName}
+                          onChange={(e) => setTempName(e.target.value)}
+                          onBlur={() => handleSave(nb.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave(nb.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          className="w-full px-1 py-0.5 text-sm rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="truncate">{nb.name}</span>
+                      )}
+
+                      {/* Ellipsis / dropdown trigger */}
+                      <EllipsisVerticalIcon
+                        className="w-4 h-4 cursor-pointer text-secondary hover:text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotebookDropdownOpen(
+                            nb.id === notebookDropdownOpen ? null : nb.id
+                          );
+                        }}
                       />
-                    </svg>
-                    <span className="truncate">{nb.name}</span>
-                  </div>
-                  {activeNotebook === nb.id && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50"></div>
+                    </div>
+                  </button>
+
+                  {/* Notebook dropdown menu for Edit/Delete */}
+                  {notebookDropdownOpen === nb.id && (
+                    <div className="absolute right-0 mt-1 w-32 bg-surface border border-default rounded-lg shadow-lg z-50">
+                      <button
+                        className="block w-full text-left px-4 py-2 text-sm hover:bg-red-100 text-red-600"
+                        onClick={() =>
+                          setConfirmDelete({ open: true, id: nb.id })
+                        }
+                      >
+                        Delete
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                        onClick={() => handleUpdateClick(nb)}
+                      >
+                        Edit
+                      </button>
+                    </div>
                   )}
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -317,6 +335,16 @@ export default function Sidebar() {
                 new CustomEvent("notebooksUpdated", { detail: data })
               );
             });
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={confirmDelete.open}
+        message="Are you sure you want to delete this notebook? This action cannot be undone."
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+        onConfirm={() => {
+          if (confirmDelete.id !== null) handleDelete(confirmDelete.id);
+          setConfirmDelete({ open: false, id: null });
         }}
       />
     </aside>

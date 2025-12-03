@@ -32,25 +32,24 @@ export default function CreateNoteModal({
   );
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [notebooksList, setNotebooksList] =
-    useState<{ id: number; name: string }[]>(notebooks);
 
-  // Calculate word and character count when content changes
+  // Word & character count
   useEffect(() => {
     const words = content.trim() ? content.trim().split(/\s+/).length : 0;
     setWordCount(words);
     setCharacterCount(content.length);
   }, [content]);
 
-  // Listen for notebook updates
+  // Reset form when modal opens
   useEffect(() => {
-    const handleNotebooksUpdate = (e: any) => {
-      setNotebooksList((prev) => [...prev, e.detail]);
-    };
-    document.addEventListener("notebooksUpdated", handleNotebooksUpdate);
-    return () =>
-      document.removeEventListener("notebooksUpdated", handleNotebooksUpdate);
-  }, []);
+    if (isOpen) {
+      setTitle("");
+      setContent("");
+      setNotebookId(defaultNotebookId ?? null);
+      setTags([]);
+      setTagInput("");
+    }
+  }, [isOpen, defaultNotebookId]);
 
   if (!isOpen) return null;
 
@@ -72,19 +71,22 @@ export default function CreateNoteModal({
     }
   };
 
-  const removeTag = (t: string) =>
+  const removeTag = (t: string) => {
     setTags((prev) => prev.filter((x) => x !== t));
+  };
 
   const handleSave = () => {
-    if (title.trim()) {
-      onSave(title, content, notebookId, tags);
-      setTitle("");
-      setContent("");
-      setNotebookId(defaultNotebookId ?? null);
-      setTags([]);
-      setTagInput("");
-      onClose();
-    }
+    if (!title.trim()) return;
+
+    onSave(title, content, notebookId, tags);
+
+    setTitle("");
+    setContent("");
+    setNotebookId(defaultNotebookId ?? null);
+    setTags([]);
+    setTagInput("");
+
+    onClose();
   };
 
   return (
@@ -119,7 +121,6 @@ export default function CreateNoteModal({
             <button
               onClick={onClose}
               className="text-secondary hover:text-primary transition-smooth p-2 rounded-lg hover:bg-[var(--github-border)]/40 active:scale-95"
-              title="Close"
               aria-label="Close dialog"
             >
               <XMarkIcon className="w-5 h-5" />
@@ -143,13 +144,13 @@ export default function CreateNoteModal({
             </p>
           </div>
 
-          {/* Editor + Tips */}
+          {/* Editor */}
           <div className="relative rounded-2xl bg-surface/40 border border-default/60 px-3 sm:px-4 py-3 shadow-inner">
             <textarea
               placeholder="Start writing your thoughts..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full min-h-[120px] sm:min-h-[220px] md:min-h-[280px] text-primary bg-transparent resize-none outline-none border-none focus:ring-0 leading-relaxed placeholder:text-secondary/60 text-base"
+              className="w-full min-h-[120px] sm:min-h-[220px] md:min-h-[280px] text-primary bg-transparent resize-none outline-none border-none leading-relaxed placeholder:text-secondary/60 text-base"
               style={{
                 backgroundImage:
                   "linear-gradient(rgba(99, 110, 123, 0.1) 1px, transparent 1px)",
@@ -158,21 +159,12 @@ export default function CreateNoteModal({
               }}
             />
 
-            {/* Tips rendered below the textarea so they never overlap typed content */}
             {!content && (
               <div className="mt-3 p-3 bg-[var(--github-bg-secondary)]/35 border border-default/60 rounded-md text-sm text-secondary">
                 <p className="font-semibold mb-1">✨ Tips</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>
-                    Use{" "}
-                    <kbd className="px-1 py-0.5 bg-[var(--github-bg-primary)] rounded text-[10px]">
-                      Ctrl
-                    </kbd>
-                    +
-                    <kbd className="px-1 py-0.5 bg-[var(--github-bg-primary)] rounded text-[10px]">
-                      Enter
-                    </kbd>{" "}
-                    to save quickly
+                    Use <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to save quickly
                   </li>
                   <li>Add tags for better organization</li>
                 </ul>
@@ -196,7 +188,7 @@ export default function CreateNoteModal({
                 className="w-full bg-surface border-2 border-default rounded-lg px-3 py-2 text-sm sm:px-4 sm:py-3 focus:outline-none focus:border-[var(--github-accent)] focus:ring-2 focus:ring-[var(--github-accent)]/20 transition-smooth cursor-pointer"
               >
                 <option value="">📋 No notebook</option>
-                {notebooksList.map((nb) => (
+                {notebooks.map((nb) => (
                   <option key={nb.id} value={nb.id}>
                     📔 {nb.name}
                   </option>
@@ -206,11 +198,12 @@ export default function CreateNoteModal({
           )}
 
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Tags input */}
+            {/* Tags */}
             <div>
               <label className="block text-xs font-bold tracking-wider text-secondary mb-2 uppercase">
                 Tags
               </label>
+
               <div className="min-h-[48px] p-2 sm:p-3 bg-surface border-2 border-default rounded-lg focus-within:border-[var(--github-accent)] focus-within:ring-2 focus-within:ring-[var(--github-accent)]/20 transition-smooth">
                 <div className="flex flex-wrap gap-2 mb-2">
                   {tags.map((t) => (
@@ -223,7 +216,6 @@ export default function CreateNoteModal({
                         type="button"
                         onClick={() => removeTag(t)}
                         className="hover:text-[var(--github-danger)] transition-colors"
-                        aria-label={`Remove tag ${t}`}
                       >
                         <svg
                           className="w-3 h-3"
@@ -240,6 +232,7 @@ export default function CreateNoteModal({
                     </span>
                   ))}
                 </div>
+
                 <input
                   type="text"
                   value={tagInput}
@@ -255,11 +248,12 @@ export default function CreateNoteModal({
               </div>
             </div>
 
-            {/* Word count */}
+            {/* Word & character count */}
             <div className="p-3 sm:p-4 bg-surface/60 rounded-lg border border-default/60 shadow-inner flex flex-col gap-3">
               <span className="text-xs font-bold tracking-wider text-secondary uppercase">
                 Live stats
               </span>
+
               <div className="flex items-center justify-between text-sm text-primary">
                 <div className="flex items-center gap-2">
                   <svg
@@ -284,7 +278,9 @@ export default function CreateNoteModal({
                     </p>
                   </div>
                 </div>
+
                 <div className="w-px h-10 bg-default/70" />
+
                 <div className="flex items-center gap-2">
                   <svg
                     className="w-4 h-4"
@@ -313,7 +309,7 @@ export default function CreateNoteModal({
           </div>
         </div>
 
-        {/* Footer (fixed within modal) */}
+        {/* Footer */}
         <div className="px-4 py-4 sm:px-6 sm:py-6 bg-surface/30 border-t border-default rounded-b-2xl flex justify-between items-center flex-shrink-0">
           <div className="flex items-center gap-2 text-xs text-secondary">
             <kbd className="px-2 py-1 bg-[var(--github-bg-secondary)] border border-default rounded text-[10px] font-mono">
@@ -329,14 +325,15 @@ export default function CreateNoteModal({
           <div className="flex space-x-3">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 text-sm font-medium btn-muted rounded-lg transition-smooth hover:scale-105 active:scale-95"
+              className="px-5 py-2.5 text-sm font-medium btn-muted rounded-lg transition-smooth"
             >
               Cancel
             </button>
+
             <button
               onClick={handleSave}
               disabled={!title.trim()}
-              className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold btn-primary rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold btn-primary rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 disabled:opacity-50"
             >
               <PencilSquareIcon className="w-4 h-4" />
               Create Note
