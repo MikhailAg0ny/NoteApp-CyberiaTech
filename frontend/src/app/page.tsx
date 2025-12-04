@@ -9,6 +9,8 @@ import { useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
+import ManualWalletPanel from "./components/ManualWalletPanel";
+import { useWallet } from "./contexts/WalletContext";
 
 type Note = {
   id: number;
@@ -23,33 +25,82 @@ type Note = {
   createdAt?: string | null;
 };
 
+type ApiNoteResponse = {
+  id: number;
+  title?: string | null;
+  content?: string | null;
+  notebook_id?: number | null;
+  notebook_name?: string | null;
+  tags?: { id?: number; name: string }[];
+  created_at?: string | null;
+};
+
+type NotebookFilterDetail = {
+  notebookId: number | null;
+};
+
+const mapApiNote = (apiNote: ApiNoteResponse): Note => {
+  const createdAt = apiNote.created_at ?? null;
+  return {
+    id: apiNote.id,
+    title: apiNote.title || "",
+    content: apiNote.content || "",
+    notebook_id: apiNote.notebook_id ?? null,
+    notebook_name: apiNote.notebook_name ?? null,
+    tags: apiNote.tags || [],
+    category: "Notes",
+    date: "Today",
+    time: createdAt
+      ? new Date(createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : undefined,
+    createdAt,
+  };
+};
+
+const getErrorMessage = (err: unknown) => {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return "An unexpected error occurred";
+};
+
 export default function Page() {
   // Starting with an empty notes array
   const [notes, setNotes] = useState<Note[]>([]);
   const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
     []
   );
-  const [tags, setTags] = useState<{ id: number; name: string }[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [previewing, setPreviewing] = useState<Note | null>(null);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [activeFilter, setActiveFilter] = useState("Today");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const wallet = useWallet();
+  const {
+    isEnabled: walletEnabled,
+    connectedWallet,
+    address: walletAddress,
+    balanceAda: walletBalance,
+    error: walletError,
+    browserMnemonic,
+    browserAddress,
+    linkedWallet,
+  } = wallet;
+  const manualAddress = linkedWallet?.wallet_address || browserAddress || null;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
   const [isFabDropdownOpen, setIsFabDropdownOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement>(null);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const userId =
-    typeof window !== "undefined" ? localStorage.getItem("user_id") : null; // retained for display if needed (not sent as param)
 
   const redirectToLogin = () => {
     if (typeof window !== "undefined") {
@@ -78,30 +129,11 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
-      const data = await res.json();
-      const mapped: Note[] = data.map((n: any) => {
-        const createdAt = n.created_at ?? null;
-        return {
-          id: n.id,
-          title: n.title || "",
-          content: n.content || "",
-          notebook_id: n.notebook_id ?? null,
-          notebook_name: n.notebook_name ?? null,
-          tags: n.tags || [],
-          category: "Notes",
-          date: "Today",
-          time: createdAt
-            ? new Date(createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : undefined,
-          createdAt,
-        };
-      });
+      const data = (await res.json()) as ApiNoteResponse[];
+      const mapped: Note[] = data.map(mapApiNote);
       setNotes(mapped);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -126,29 +158,9 @@ export default function Page() {
     } catch {}
   };
 
-  const fetchTags = async () => {
-    try {
-      if (!token) {
-        redirectToLogin();
-        return;
-      }
-      const res = await fetch(`${API_BASE}/api/tags`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        redirectToLogin();
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      setTags(data);
-    } catch {}
-  };
-
   useEffect(() => {
     fetchNotes();
     fetchNotebooks();
-    fetchTags();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -180,32 +192,16 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error("Create failed");
-      const created = await res.json();
-      const note: Note = {
-        id: created.id,
-        title: created.title,
-        content: created.content,
-        notebook_id: created.notebook_id ?? null,
-        notebook_name: created.notebook_name ?? null,
-        tags: created.tags || [],
-        category: "Notes",
-        date: "Today",
-        time: created.created_at
-          ? new Date(created.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : undefined,
-        createdAt: created.created_at ?? null,
-      };
+      const created = (await res.json()) as ApiNoteResponse;
+      const note = mapApiNote(created);
       setNotes((prev) => [note, ...prev]);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2600);
       // Open the newly created note in modal for viewing/editing
       setSelected(note);
       setIsNoteModalOpen(true);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -239,37 +235,16 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error("Update failed");
-      const updated = await res.json();
+      const updated = (await res.json()) as ApiNoteResponse;
+      const normalized = mapApiNote(updated);
       setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId
-            ? {
-                ...n,
-                title: updated.title,
-                content: updated.content,
-                notebook_id: updated.notebook_id ?? null,
-                notebook_name: updated.notebook_name ?? null,
-                tags: updated.tags || [],
-                createdAt: updated.created_at ?? n.createdAt ?? null,
-              }
-            : n
-        )
+        prev.map((n) => (n.id === noteId ? { ...n, ...normalized } : n))
       );
       setSelected((prev) =>
-        prev && prev.id === noteId
-          ? {
-              ...prev,
-              title: updated.title,
-              content: updated.content,
-              notebook_id: updated.notebook_id ?? null,
-              notebook_name: updated.notebook_name ?? null,
-              tags: updated.tags || [],
-              createdAt: updated.created_at ?? prev.createdAt ?? null,
-            }
-          : prev
+        prev && prev.id === noteId ? { ...prev, ...normalized } : prev
       );
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -291,8 +266,8 @@ export default function Page() {
         setSelected(null);
         setIsNoteModalOpen(false);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -311,8 +286,9 @@ export default function Page() {
     const handleOpenSettings = () => setIsSettingsOpen(true);
     document.addEventListener("openCreateNoteModal", handleOpenCreateModal);
     document.addEventListener("openSettingsModal", handleOpenSettings);
-    const handleFilterNotebook = (e: any) => {
-      setActiveNotebook(e.detail?.notebookId ?? null);
+    const handleFilterNotebook = (event: Event) => {
+      const customEvent = event as CustomEvent<NotebookFilterDetail>;
+      setActiveNotebook(customEvent.detail?.notebookId ?? null);
     };
     document.addEventListener("filterNotebook", handleFilterNotebook);
 
@@ -431,6 +407,54 @@ export default function Page() {
           </button>
         </div>
       </div>
+
+      {walletEnabled && connectedWallet && walletAddress && (
+        <div className="mb-6 card rounded-2xl border border-dashed border-default bg-[var(--github-bg-secondary)]/40 p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-primary flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Wallet connected: {connectedWallet.label}
+          </p>
+          <p className="text-xs text-secondary">
+            {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)} ·{" "}
+            {walletBalance === null ? "--" : `${walletBalance.toFixed(2)} ADA`}
+          </p>
+          {walletError && (
+            <p className="text-xs text-[var(--github-danger)] mt-1">
+              {walletError}
+            </p>
+          )}
+        </div>
+      )}
+
+      {walletEnabled && (
+        <div className="mb-8 space-y-3">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-semibold">
+              Manual wallet mode active
+            </span>
+            <span
+              className={`px-3 py-1 rounded-full font-semibold ${
+                browserMnemonic
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : "bg-[var(--github-danger)]/15 text-[var(--github-danger)]"
+              }`}
+            >
+              {browserMnemonic
+                ? "Mnemonic detected in this browser"
+                : "Mnemonic missing – re-register here"}
+            </span>
+            <span className="px-3 py-1 rounded-full bg-surface border border-dashed border-default text-secondary font-semibold">
+              {manualAddress
+                ? `Linked address: ${manualAddress.slice(
+                    0,
+                    10
+                  )}…${manualAddress.slice(-6)}`
+                : "No address on file"}
+            </span>
+          </div>
+          <ManualWalletPanel />
+        </div>
+      )}
 
       {/* Notes Grid (always visible now) */}
       <>
