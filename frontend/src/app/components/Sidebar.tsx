@@ -326,7 +326,7 @@ export default function Sidebar() {
                       ) : (
                         <span className="truncate">{nb.name}</span>
                       )}
-                      6
+
                       <EllipsisVerticalIcon
                         className="w-4 h-4 cursor-pointer text-secondary hover:text-primary"
                         onClick={(e) => {
