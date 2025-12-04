@@ -206,14 +206,6 @@ export default function Sidebar() {
       {/* Navigation with increased top margin */}
       <nav className="flex-1 p-4 space-y-2 mt-2 relative z-10">
         <div className="mb-4">
-          <button
-            className="flex items-center justify-center gap-2.5 w-full px-5 py-3.5 rounded-xl bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white hover:shadow-lg hover:shadow-[var(--github-accent)]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] transition-smooth hover:scale-105 active:scale-95 font-semibold text-sm"
-            onClick={handleCreateNoteClick}
-          >
-            <PlusIcon className="w-5 h-5" />
-            <span>Create Note</span>
-          </button>
-
           {createDropdownOpen && (
             <div className="absolute mt-1 w-full bg-surface border border-default rounded-md shadow-lg z-50">
               <button
