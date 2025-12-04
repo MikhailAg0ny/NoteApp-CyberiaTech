@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@blaze-cardano/sdk": "^0.2.44",
+    "@emurgo/cardano-message-signing-browser": "^1.1.0",
     "@emurgo/cardano-serialization-lib-browser": "^15.0.3",
+    "@heroicons/react": "^2.2.0",
     "next": "15.5.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",

@@ -44,8 +44,10 @@ export default function CreateNoteModal({
 
   // Listen for notebook updates
   useEffect(() => {
-    const handleNotebooksUpdate = (e: any) => {
-      setNotebooksList((prev) => [...prev, e.detail]);
+    const handleNotebooksUpdate = (event: Event) => {
+      const { detail } = event as CustomEvent<{ id: number; name: string }>;
+      if (!detail) return;
+      setNotebooksList((prev) => [...prev, detail]);
     };
     document.addEventListener("notebooksUpdated", handleNotebooksUpdate);
     return () =>

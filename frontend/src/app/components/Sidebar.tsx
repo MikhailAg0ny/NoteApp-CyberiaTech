@@ -6,12 +6,11 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
-  ChevronDownIcon,
-  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import CreateNotebookModal from "./CreateNoteBookModal";
+import WalletConnector from "./WalletConnector";
 
 interface Notebook {
   id: number;
@@ -24,12 +23,7 @@ export default function Sidebar() {
 
   // Separate state variables
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
-  const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<
-    number | null
-  >(null);
   const [showNotebookModal, setShowNotebookModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [tempName, setTempName] = useState("");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -83,53 +77,34 @@ export default function Sidebar() {
     document.dispatchEvent(new CustomEvent("openCreateNoteModal"));
   };
 
-  const handleUpdateClick = (nb: Notebook) => {
-    setEditingId(nb.id);
-    setTempName(nb.name);
-    setNotebookDropdownOpen(null);
+  const triggerSearch = () => {
+    document.dispatchEvent(new CustomEvent("openSearchPanel"));
   };
 
-  const handleSave = async (id: number) => {
-    if (!tempName.trim() || !token) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/notebooks/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: tempName.trim() }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setNotebooks((prev) => prev.map((nb) => (nb.id === id ? updated : nb)));
-        setEditingId(null);
-        setTempName("");
-      }
-    } catch (err) {
-      console.error("Failed to update notebook:", err);
-    }
+  const openTrash = () => {
+    document.dispatchEvent(new CustomEvent("filterNotebook", { detail: { notebookId: "trash" } }));
   };
 
-  const handleDelete = async (id: number) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/notebooks/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setNotebooks((prev) => prev.filter((nb) => nb.id !== id));
-        if (activeNotebook === id) setActiveNotebook(null);
-      }
-    } catch (err) {
-      console.error("Failed to delete notebook:", err);
-    }
-  };
+  const navItems = [
+    {
+      icon: MagnifyingGlassIcon,
+      label: "Search",
+      action: triggerSearch,
+    },
+    {
+      icon: DocumentTextIcon,
+      label: "All Notes",
+      action: () => selectNotebook(null),
+    },
+    {
+      icon: TrashIcon,
+      label: "Trash",
+      action: openTrash,
+    },
+  ];
 
   return (
-  <aside className="hidden md:flex md:flex-col w-72 bg-surface border-r border-default shadow-lg transition-colors select-none relative">
+  <aside className="hidden md:flex md:flex-col w-80 bg-surface border-r border-default shadow-xl transition-colors select-none relative">
       {/* Subtle gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-[var(--github-accent)]/5 via-transparent to-transparent pointer-events-none"></div>
       
@@ -148,7 +123,7 @@ export default function Sidebar() {
       </div>
       
       {/* Navigation with increased top margin */}
-      <nav className="flex-1 p-4 space-y-2 mt-2 relative z-10">
+      <nav className="flex-1 p-4 space-y-2 mt-2 relative z-10 overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--github-border)] scrollbar-track-transparent">
         <div className="mb-4">
           <button
             className="flex items-center justify-center gap-2.5 w-full px-5 py-3.5 rounded-xl bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white hover:shadow-lg hover:shadow-[var(--github-accent)]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] transition-smooth hover:scale-105 active:scale-95 font-semibold text-sm"
@@ -184,23 +159,17 @@ export default function Sidebar() {
           )}
         </div>
         <div className="space-y-1">
-          {[
-            { icon: MagnifyingGlassIcon, label: 'Search', badge: null },
-            { icon: DocumentTextIcon, label: 'All Notes', badge: null },
-            { icon: TrashIcon, label: 'Trash', badge: null }
-          ].map(({ icon: Icon, label, badge }) => (
+          {navItems.map(({ icon: Icon, label, action }) => (
             <button
               key={label}
               type="button"
+              onClick={action}
               className="group flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm text-secondary hover:text-primary hover:bg-[var(--github-border)]/30 transition-smooth relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] overflow-hidden"
             >
               <div className="flex items-center gap-3 relative z-10">
                 <Icon className="w-5 h-5 text-secondary group-hover:text-[var(--github-accent)] transition-colors" />
                 <span className="font-medium">{label}</span>
               </div>
-              {badge && (
-                <span className="px-2 py-0.5 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] text-[10px] font-bold">{badge}</span>
-              )}
               <div className="absolute inset-0 bg-gradient-to-r from-[var(--github-accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </button>
           ))}
@@ -258,7 +227,8 @@ export default function Sidebar() {
         )}
       </nav>
 
-      <div className="mt-auto p-4 border-t border-default/60 bg-[var(--github-bg-secondary)]/50 backdrop-blur-sm relative z-10">
+      <div className="mt-auto p-4 border-t border-default/60 bg-[var(--github-bg-secondary)]/50 backdrop-blur-sm relative z-10 space-y-4">
+        <WalletConnector />
         <button 
           onClick={openSettings} 
           className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm text-secondary hover:text-primary hover:bg-[var(--github-border)]/30 transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] group"
