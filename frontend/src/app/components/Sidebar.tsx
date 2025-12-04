@@ -3,6 +3,7 @@
 import {
   Cog6ToothIcon,
   DocumentTextIcon,
+  EllipsisVerticalIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
@@ -25,6 +26,11 @@ export default function Sidebar() {
   // Separate state variables
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
   const [showNotebookModal, setShowNotebookModal] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [tempName, setTempName] = useState("");
+  const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<
+    number | null
+  >(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -114,6 +120,52 @@ export default function Sidebar() {
     );
   };
 
+  const handleUpdateClick = (notebook: Notebook) => {
+    setEditingId(notebook.id);
+    setTempName(notebook.name);
+    setNotebookDropdownOpen(null);
+  };
+
+  const handleSave = async (id: number) => {
+    if (!tempName.trim() || !token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/notebooks/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: tempName }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setNotebooks((prev) => prev.map((nb) => (nb.id === id ? updated : nb)));
+        setEditingId(null);
+        setTempName("");
+      }
+    } catch (error) {
+      console.error("Failed to update notebook:", error);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!token) return;
+
+    try {
+      await fetch(`${API_BASE}/api/notebooks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setNotebooks((prev) => prev.filter((nb) => nb.id !== id));
+      if (activeNotebook === id) selectNotebook(null);
+    } catch (error) {
+      console.error("Failed to delete notebook:", error);
+    }
+  };
+
   const navItems = [
     {
       icon: MagnifyingGlassIcon,
@@ -188,11 +240,7 @@ export default function Sidebar() {
           )}
         </div>
         <div className="space-y-1">
-          {[
-            { icon: MagnifyingGlassIcon, label: "Search" },
-            { icon: DocumentTextIcon, label: "All Notes" },
-            { icon: TrashIcon, label: "Trash" },
-          ].map(({ icon: Icon, label }) => (
+          {navItems.map(({ icon: Icon, label, action }) => (
             <button
               key={label}
               type="button"
