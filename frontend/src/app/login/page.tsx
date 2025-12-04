@@ -49,8 +49,9 @@ export default function LoginPage() {
       
       // Use router for smoother navigation
       router.push('/');
-    } catch (e:any) {
-      setError(e.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setError(message);
     } finally { 
       setLoading(false); 
     }
@@ -166,7 +167,7 @@ export default function LoginPage() {
             href="/register"
             className="text-sm text-secondary hover:text-primary transition-colors inline-flex items-center gap-1.5 group"
           >
-            <span>Don't have an account?</span>
+            <span>Don&apos;t have an account?</span>
             <span className="text-[var(--github-accent)] font-semibold group-hover:underline">Sign up</span>
             <svg className="w-3 h-3 text-[var(--github-accent)] group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
