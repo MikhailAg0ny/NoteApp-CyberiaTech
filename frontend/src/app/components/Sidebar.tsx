@@ -6,12 +6,11 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
-  ChevronDownIcon,
-  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import CreateNotebookModal from "./CreateNoteBookModal";
+import WalletConnector from "./WalletConnector";
 import ConfirmModal from "./ConfirmModal";
 
 interface Notebook {
@@ -25,12 +24,7 @@ export default function Sidebar() {
 
   // Separate state variables
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
-  const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<
-    number | null
-  >(null);
   const [showNotebookModal, setShowNotebookModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [tempName, setTempName] = useState("");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -110,50 +104,33 @@ export default function Sidebar() {
     document.dispatchEvent(new CustomEvent("openCreateNoteModal"));
   };
 
-  const handleUpdateClick = (nb: Notebook) => {
-    setEditingId(nb.id);
-    setTempName(nb.name);
-    setNotebookDropdownOpen(null);
+  const triggerSearch = () => {
+    document.dispatchEvent(new CustomEvent("openSearchPanel"));
   };
 
-  const handleSave = async (id: number) => {
-    if (!tempName.trim() || !token) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/notebooks/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: tempName.trim() }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setNotebooks((prev) => prev.map((nb) => (nb.id === id ? updated : nb)));
-        setEditingId(null);
-        setTempName("");
-      }
-    } catch (err) {
-      console.error("Failed to update notebook:", err);
-    }
+  const openTrash = () => {
+    document.dispatchEvent(
+      new CustomEvent("filterNotebook", { detail: { notebookId: "trash" } })
+    );
   };
 
-  const handleDelete = async (id: number) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/notebooks/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setNotebooks((prev) => prev.filter((nb) => nb.id !== id));
-        if (activeNotebook === id) setActiveNotebook(null);
-      }
-    } catch (err) {
-      console.error("Failed to delete notebook:", err);
-    }
-  };
+  const navItems = [
+    {
+      icon: MagnifyingGlassIcon,
+      label: "Search",
+      action: triggerSearch,
+    },
+    {
+      icon: DocumentTextIcon,
+      label: "All Notes",
+      action: () => selectNotebook(null),
+    },
+    {
+      icon: TrashIcon,
+      label: "Trash",
+      action: openTrash,
+    },
+  ];
 
   return (
     <aside className="hidden md:flex md:flex-col w-72 bg-surface border-r border-default shadow-lg transition-colors select-none relative">
@@ -186,6 +163,7 @@ export default function Sidebar() {
             <button
               key={label}
               type="button"
+              onClick={action}
               className="group flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm text-secondary hover:text-primary hover:bg-[var(--github-border)]/30 transition-smooth relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] overflow-hidden"
             >
               <div className="flex items-center gap-3 relative z-10">

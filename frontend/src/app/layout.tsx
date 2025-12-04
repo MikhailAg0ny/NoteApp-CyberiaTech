@@ -2,6 +2,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ReactNode } from "react";
 import { ThemeProvider } from './components/ThemeProvider';
 import ConditionalLayout from './components/ConditionalLayout';
+import { WalletProvider } from './contexts/WalletContext';
 import "./globals.css";
 // Plus Jakarta Sans isn't available in next/font/google so we'll keep using it via CSS
 
@@ -29,9 +30,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="flex h-screen text-[var(--github-text-primary)] bg-[var(--github-bg)] transition-colors overflow-hidden">
-        <ThemeProvider>
-          <ConditionalLayout>{children}</ConditionalLayout>
-        </ThemeProvider>
+        <WalletProvider>
+          <ThemeProvider>
+            <ConditionalLayout>{children}</ConditionalLayout>
+          </ThemeProvider>
+        </WalletProvider>
       </body>
     </html>
   );
