@@ -4,14 +4,13 @@ import {
   Cog6ToothIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
-  MagnifyingGlassIcon,
-  PlusIcon,
+  PencilIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import Image from "next/image";
-import { useEffect, useState, useRef } from "react";
-import CreateNotebookModal from "./CreateNoteBookModal";
+import { useEffect, useRef, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
+import CreateNotebookModal from "./CreateNoteBookModal";
+import { useTheme } from "./ThemeProvider";
 import WalletConnector from "./WalletConnector";
 
 interface Notebook {
@@ -19,18 +18,19 @@ interface Notebook {
   name: string;
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+}
+
+export default function Sidebar({ isOpen = true }: SidebarProps) {
+  const { theme } = useTheme();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
-
-  // Separate state variables
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
   const [showNotebookModal, setShowNotebookModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [tempName, setTempName] = useState("");
-  const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<
-    number | null
-  >(null);
+  const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<number | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -42,23 +42,31 @@ export default function Sidebar() {
   });
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  // Theme-aware colors
+  const isDark = theme === 'dark';
+  const bgSidebar = isDark ? 'bg-black' : 'bg-[#f6f8fc]';
+  const borderColor = isDark ? 'border-gray-800' : 'border-gray-200';
+  const textPrimary = isDark ? 'text-gray-300' : 'text-[#3c4043]';
+  const textActive = isDark ? 'text-white' : 'text-[#d93025]';
+  const bgHover = isDark ? 'hover:bg-gray-900' : 'hover:bg-[#fce8e6]';
+  const bgActive = isDark ? 'bg-gray-800' : 'bg-[#fce8e6]';
+  const bgDropdown = isDark ? 'bg-gray-900' : 'bg-white';
+  const borderDropdown = isDark ? 'border-gray-700' : 'border-gray-200';
+  const composeBtn = isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-white text-[#3c4043] hover:bg-gray-100';
+  const inputBg = isDark ? 'bg-gray-800 text-white border-gray-600' : 'bg-white text-black border-gray-300';
+  const focusRing = isDark ? 'focus:ring-gray-500' : 'focus:ring-[#d93025]';
 
   useEffect(() => {
     const handler = () => setShowNotebookModal(true);
     document.addEventListener("openCreateNotebookModal", handler);
-    return () =>
-      document.removeEventListener("openCreateNotebookModal", handler);
+    return () => document.removeEventListener("openCreateNotebookModal", handler);
   }, []);
 
-  // Close outside clicks for Create dropdown
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setCreateDropdownOpen(false);
       }
     };
@@ -66,7 +74,6 @@ export default function Sidebar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Fetch notebooks
   useEffect(() => {
     const fetchNotebooks = async () => {
       if (!token) return;
@@ -83,7 +90,6 @@ export default function Sidebar() {
     fetchNotebooks();
   }, [token, API_BASE]);
 
-  // Listen for notebookCreated events from anywhere
   useEffect(() => {
     const handleNotebookCreated = (e: any) => {
       const newNotebook = e.detail;
@@ -91,8 +97,7 @@ export default function Sidebar() {
     };
 
     document.addEventListener("notebookCreated", handleNotebookCreated);
-    return () =>
-      document.removeEventListener("notebookCreated", handleNotebookCreated);
+    return () => document.removeEventListener("notebookCreated", handleNotebookCreated);
   }, []);
 
   const openSettings = () => {
@@ -108,10 +113,6 @@ export default function Sidebar() {
 
   const handleCreateNoteClick = () => {
     document.dispatchEvent(new CustomEvent("openCreateNoteModal"));
-  };
-
-  const triggerSearch = () => {
-    document.dispatchEvent(new CustomEvent("openSearchPanel"));
   };
 
   const openTrash = () => {
@@ -168,48 +169,41 @@ export default function Sidebar() {
 
   const navItems = [
     {
-      icon: MagnifyingGlassIcon,
-      label: "Search",
-      action: triggerSearch,
-    },
-    {
       icon: DocumentTextIcon,
       label: "All Notes",
       action: () => selectNotebook(null),
+      count: null,
     },
     {
       icon: TrashIcon,
       label: "Trash",
       action: openTrash,
+      count: null,
     },
   ];
 
   return (
-    <aside className="hidden md:flex md:flex-col w-72 bg-surface border-r border-default shadow-lg transition-colors select-none relative">
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[var(--github-accent)]/5 via-transparent to-transparent z-0 pointer-events-none"></div>
+    <aside 
+      className={`flex flex-col w-64 ${bgSidebar} border-r ${borderColor} select-none transition-all duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
+      }`}
+      style={{ height: '100%' }}
+    >
+      {/* Compose Button */}
+      <div className="p-4">
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setCreateDropdownOpen(!createDropdownOpen)}
+            className={`flex items-center gap-4 px-6 py-3 ${composeBtn} shadow-md rounded-full font-medium text-[14px] transition-all w-full justify-center`}
+          >
+            <PencilIcon className="w-5 h-5" />
+            <span>Compose</span>
+          </button>
 
-      {/* Logo */}
-      <div className="relative z-10 border-b border-default/60">
-        <div className="py-8 px-6 flex items-center justify-center">
-          <Image
-            src="/logo.svg"
-            alt="CyberiaTech Logo"
-            width={120}
-            height={60}
-            className="object-contain transition-opacity hover:opacity-90"
-            priority
-          />
-        </div>
-      </div>
-
-      {/* Navigation with increased top margin */}
-      <nav className="flex-1 p-4 space-y-2 mt-2 relative z-10">
-        <div className="mb-4">
           {createDropdownOpen && (
-            <div className="absolute mt-1 w-full bg-surface border border-default rounded-md shadow-lg z-50">
+            <div className={`absolute left-0 mt-2 w-full ${bgDropdown} border ${borderDropdown} rounded-lg shadow-xl z-50`}>
               <button
-                className="w-full text-left px-4 py-2 hover:bg-[var(--github-accent)]/10 transition"
+                className={`w-full text-left px-4 py-3 text-[14px] ${textPrimary} ${bgHover} transition`}
                 onClick={() => {
                   setCreateDropdownOpen(false);
                   handleCreateNoteClick();
@@ -218,7 +212,7 @@ export default function Sidebar() {
                 Create Note
               </button>
               <button
-                className="w-full text-left px-4 py-2 hover:bg-[var(--github-accent)]/10 transition"
+                className={`w-full text-left px-4 py-3 text-[14px] ${textPrimary} ${bgHover} transition`}
                 onClick={() => {
                   if (!token) return;
                   setCreateDropdownOpen(false);
@@ -231,145 +225,113 @@ export default function Sidebar() {
             </div>
           )}
         </div>
-        <div className="space-y-1">
-          {navItems.map(({ icon: Icon, label, action }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={action}
-              className="group flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm text-secondary hover:text-primary hover:bg-[var(--github-border)]/30 transition-smooth relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] overflow-hidden"
-            >
-              <div className="flex items-center gap-3 relative z-10">
-                <Icon className="w-5 h-5 text-secondary group-hover:text-[var(--github-accent)] transition-colors" />
-                <span className="font-medium">{label}</span>
-              </div>
-            </button>
-          ))}
-        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+        {navItems.map(({ icon: Icon, label, action, count }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={action}
+            className={`group flex w-full items-center gap-4 px-6 py-2 rounded-r-full text-[14px] ${textPrimary} ${bgHover} transition-colors`}
+          >
+            <Icon className="w-5 h-5" />
+            <span className="font-medium">{label}</span>
+            {count && (
+              <span className={`ml-auto ${textPrimary} text-[12px]`}>{count}</span>
+            )}
+          </button>
+        ))}
 
         {/* Notebooks Section */}
         {notebooks.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-default/40">
-            <div className="px-4 mb-3 flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-wider font-bold text-secondary">
-                Notebooks
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface text-secondary font-medium">
-                {notebooks.length}
-              </span>
-            </div>
+          <div className="mt-4 pt-4">
+            <button
+              onClick={() => selectNotebook(null)}
+              className={`flex w-full items-center gap-4 px-6 py-2 rounded-r-full text-[14px] transition-colors ${
+                activeNotebook === null
+                  ? `${bgActive} ${textActive} font-bold`
+                  : `${textPrimary} ${bgHover}`
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <span className="font-medium">All Notebooks</span>
+            </button>
 
-            {/* Scrollable Notebook List */}
-            <div className="space-y-1 h-96 overflow-y-auto pr-2">
-              <button
-                onClick={() => selectNotebook(null)}
-                className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-all relative overflow-hidden group ${
-                  activeNotebook === null
-                    ? "bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white font-semibold shadow-lg shadow-[var(--github-accent)]/20"
-                    : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-                }`}
-              >
-                <div className="flex items-center gap-2.5 relative z-10">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+            {notebooks.map((nb) => (
+              <div key={nb.id} className="relative">
+                <button
+                  onClick={() => selectNotebook(nb.id)}
+                  className={`flex w-full items-center gap-4 px-6 py-2 rounded-r-full text-[14px] transition-colors ${
+                    activeNotebook === nb.id
+                      ? `${bgActive} ${textActive} font-bold`
+                      : `${textPrimary} ${bgHover}`
+                  }`}
+                >
+                  {editingId === nb.id ? (
+                    <input
+                      type="text"
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      onBlur={() => handleSave(nb.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSave(nb.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className={`flex-1 px-2 py-1 text-sm rounded border ${inputBg} focus:outline-none focus:ring-2 ${focusRing}`}
+                      autoFocus
                     />
-                  </svg>
-                  <span>All Notebooks</span>
-                </div>
-                {activeNotebook === null && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50"></div>
-                )}
-              </button>
-
-              {notebooks.map((nb) => (
-                <div key={nb.id} className="relative">
-                  <button
-                    onClick={() => selectNotebook(nb.id)}
-                    className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-all truncate relative overflow-hidden group ${
-                      activeNotebook === nb.id
-                        ? "bg-gradient-to-r from-[var(--github-accent)] to-[var(--github-accent-hover)] text-white font-semibold shadow-lg shadow-[var(--github-accent)]/20"
-                        : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-                    }`}
-                    title={nb.name}
-                  >
-                    <div className="flex items-center justify-between gap-2.5 relative z-10">
-                      {editingId === nb.id ? (
-                        <input
-                          type="text"
-                          value={tempName}
-                          onChange={(e) => setTempName(e.target.value)}
-                          onBlur={() => handleSave(nb.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSave(nb.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          className="w-full px-1 py-0.5 text-sm rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]"
-                          autoFocus
-                        />
-                      ) : (
-                        <span className="truncate">{nb.name}</span>
-                      )}
-
+                  ) : (
+                    <>
+                      <span className="truncate flex-1 text-left">{nb.name}</span>
                       <EllipsisVerticalIcon
-                        className="w-4 h-4 cursor-pointer text-secondary hover:text-primary"
+                        className="w-5 h-5 cursor-pointer opacity-0 group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setNotebookDropdownOpen(
-                            nb.id === notebookDropdownOpen ? null : nb.id
-                          );
+                          setNotebookDropdownOpen(nb.id === notebookDropdownOpen ? null : nb.id);
                         }}
                       />
-                    </div>
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {notebookDropdownOpen === nb.id && (
-                    <div className="absolute right-0 mt-1 w-32 bg-surface border border-default rounded-lg shadow-lg z-50">
-                      <button
-                        className="block w-full text-left px-4 py-2 text-sm hover:bg-red-100 text-red-600"
-                        onClick={() =>
-                          setConfirmDelete({ open: true, id: nb.id })
-                        }
-                      >
-                        Delete
-                      </button>
-                      <button
-                        className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
-                        onClick={() => handleUpdateClick(nb)}
-                      >
-                        Edit
-                      </button>
-                    </div>
+                    </>
                   )}
-                </div>
-              ))}
-            </div>
+                </button>
+
+                {notebookDropdownOpen === nb.id && (
+                  <div className={`absolute right-4 mt-1 w-32 ${bgDropdown} border ${borderDropdown} rounded-lg shadow-xl z-50`}>
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-[14px] ${bgHover} ${isDark ? 'text-red-400' : 'text-red-600'}`}
+                      onClick={() => setConfirmDelete({ open: true, id: nb.id })}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-[14px] ${textPrimary} ${bgHover}`}
+                      onClick={() => handleUpdateClick(nb)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </nav>
 
       {/* Settings */}
-      <div className="mt-auto p-4 border-t border-default/60 bg-[var(--github-bg-secondary)]/50 backdrop-blur-sm relative z-10 space-y-4">
+      <div className={`mt-auto p-4 border-t ${borderColor} space-y-3`}>
         <WalletConnector />
         <button
           onClick={openSettings}
-          className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm text-secondary hover:text-primary hover:bg-[var(--github-border)]/30 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--github-accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--github-bg-secondary)] group hover:scale-105"
+          className={`flex items-center gap-4 w-full px-6 py-2 rounded-r-full text-[14px] ${textPrimary} ${bgHover} transition-colors`}
         >
-          <Cog6ToothIcon className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
+          <Cog6ToothIcon className="w-5 h-5" />
           <span className="font-medium">Settings</span>
         </button>
       </div>
 
-      {/* Create Notebook Modal */}
       <CreateNotebookModal
         isOpen={showNotebookModal}
         onClose={() => setShowNotebookModal(false)}
