@@ -5,7 +5,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
@@ -96,6 +96,9 @@ export default function Page() {
   } = wallet;
   const manualAddress = linkedWallet?.wallet_address || browserAddress || null;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+  const [isFabDropdownOpen, setIsFabDropdownOpen] = useState(false);
+  const fabRef = useRef<HTMLDivElement>(null);
+
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
@@ -235,9 +238,7 @@ export default function Page() {
       const updated = (await res.json()) as ApiNoteResponse;
       const normalized = mapApiNote(updated);
       setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId ? { ...n, ...normalized } : n
-        )
+        prev.map((n) => (n.id === noteId ? { ...n, ...normalized } : n))
       );
       setSelected((prev) =>
         prev && prev.id === noteId ? { ...prev, ...normalized } : prev
@@ -346,7 +347,7 @@ export default function Page() {
   };
 
   return (
-  <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
+    <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
       {/* Create Note Modal */}
       <CreateNoteModal
         isOpen={isCreateModalOpen}
@@ -362,7 +363,9 @@ export default function Page() {
       {/* Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-primary tracking-tight bg-gradient-to-r from-[var(--github-text-primary)] to-[var(--github-text-secondary)] bg-clip-text">My Notes</h1>
+          <h1 className="text-3xl font-bold text-primary tracking-tight bg-gradient-to-r from-[var(--github-text-primary)] to-[var(--github-text-secondary)] bg-clip-text">
+            My Notes
+          </h1>
           {loading && (
             <div className="flex items-center gap-2 text-xs text-secondary">
               <div className="w-3 h-3 border-2 border-[var(--github-accent)] border-t-transparent rounded-full animate-spin"></div>
@@ -378,7 +381,7 @@ export default function Page() {
         </div>
 
         {/* Filters + Logout */}
-  <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
+        <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
           {filters.map((filter) => (
             <button
               key={filter}
@@ -393,9 +396,15 @@ export default function Page() {
             </button>
           ))}
           <button
-            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('user_id'); window.location.href='/login'; }}
+            onClick={() => {
+              localStorage.removeItem("token");
+              localStorage.removeItem("user_id");
+              window.location.href = "/login";
+            }}
             className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
-          >Logout</button>
+          >
+            Logout
+          </button>
         </div>
       </div>
 
@@ -406,10 +415,13 @@ export default function Page() {
             Wallet connected: {connectedWallet.label}
           </p>
           <p className="text-xs text-secondary">
-            {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)} · {walletBalance === null ? "--" : `${walletBalance.toFixed(2)} ADA`}
+            {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)} ·{" "}
+            {walletBalance === null ? "--" : `${walletBalance.toFixed(2)} ADA`}
           </p>
           {walletError && (
-            <p className="text-xs text-[var(--github-danger)] mt-1">{walletError}</p>
+            <p className="text-xs text-[var(--github-danger)] mt-1">
+              {walletError}
+            </p>
           )}
         </div>
       )}
@@ -421,12 +433,23 @@ export default function Page() {
               Manual wallet mode active
             </span>
             <span
-              className={`px-3 py-1 rounded-full font-semibold ${browserMnemonic ? "bg-emerald-500/15 text-emerald-300" : "bg-[var(--github-danger)]/15 text-[var(--github-danger)]"}`}
+              className={`px-3 py-1 rounded-full font-semibold ${
+                browserMnemonic
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : "bg-[var(--github-danger)]/15 text-[var(--github-danger)]"
+              }`}
             >
-              {browserMnemonic ? "Mnemonic detected in this browser" : "Mnemonic missing – re-register here"}
+              {browserMnemonic
+                ? "Mnemonic detected in this browser"
+                : "Mnemonic missing – re-register here"}
             </span>
             <span className="px-3 py-1 rounded-full bg-surface border border-dashed border-default text-secondary font-semibold">
-              {manualAddress ? `Linked address: ${manualAddress.slice(0, 10)}…${manualAddress.slice(-6)}` : "No address on file"}
+              {manualAddress
+                ? `Linked address: ${manualAddress.slice(
+                    0,
+                    10
+                  )}…${manualAddress.slice(-6)}`
+                : "No address on file"}
             </span>
           </div>
           <ManualWalletPanel />
@@ -469,8 +492,12 @@ export default function Page() {
             return (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-xl font-semibold text-primary tracking-tight">All Notes</h2>
-                  <div className="text-sm text-secondary">{filteredNotes.length} notes</div>
+                  <h2 className="text-xl font-semibold text-primary tracking-tight">
+                    All Notes
+                  </h2>
+                  <div className="text-sm text-secondary">
+                    {filteredNotes.length} notes
+                  </div>
                 </div>
                 {filteredNotes.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -485,7 +512,9 @@ export default function Page() {
                         <div className="relative z-10 flex flex-col gap-3">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <h3 className="font-semibold text-lg text-primary truncate transition-colors group-hover:text-[var(--github-accent)]">{note.title}</h3>
+                              <h3 className="font-semibold text-lg text-primary truncate transition-colors group-hover:text-[var(--github-accent)]">
+                                {note.title}
+                              </h3>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -497,11 +526,15 @@ export default function Page() {
                                 <TrashIcon className="w-4 h-4" />
                               </button>
                             </div>
-                            <p className="text-secondary line-clamp-3 text-sm leading-relaxed">{note.content || "No content"}</p>
+                            <p className="text-secondary line-clamp-3 text-sm leading-relaxed">
+                              {note.content || "No content"}
+                            </p>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {note.notebook_name && (
-                              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">{note.notebook_name}</span>
+                              <span className="text-[10px] px-2.5 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">
+                                {note.notebook_name}
+                              </span>
                             )}
                             {note.tags?.slice(0, 4).map((t) => (
                               <span
@@ -521,16 +554,36 @@ export default function Page() {
                             <div className="flex flex-wrap items-center gap-3">
                               {formatNoteDate(note.createdAt) && (
                                 <span className="flex items-center gap-1.5">
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6" />
+                                  <svg
+                                    className="w-3.5 h-3.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6"
+                                    />
                                   </svg>
                                   <span>{formatNoteDate(note.createdAt)}</span>
                                 </span>
                               )}
                               {note.time && (
                                 <span className="flex items-center gap-1.5">
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  <svg
+                                    className="w-3.5 h-3.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
                                   </svg>
                                   <span>{note.time}</span>
                                 </span>
@@ -552,8 +605,13 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="card rounded-2xl p-8 text-center border border-dashed border-default text-secondary">
-                    <p className="font-medium text-primary mb-2">No notes match this filter</p>
-                    <p className="text-sm">Try switching the timeframe or notebook selection to see other notes.</p>
+                    <p className="font-medium text-primary mb-2">
+                      No notes match this filter
+                    </p>
+                    <p className="text-sm">
+                      Try switching the timeframe or notebook selection to see
+                      other notes.
+                    </p>
                   </div>
                 )}
               </div>
@@ -566,9 +624,17 @@ export default function Page() {
               <div className="w-24 h-24 bg-gradient-to-br from-surface to-[var(--github-border)]/30 border-2 border-default rounded-2xl flex items-center justify-center mb-6 text-secondary shadow-lg">
                 <DocumentTextIcon className="w-12 h-12" />
               </div>
-              <h3 className="text-3xl font-bold text-primary mb-3 tracking-tight">No notes yet</h3>
-              <p className="text-secondary mb-8 text-center max-w-md leading-relaxed">Start capturing your ideas and thoughts with CyberiaTech&apos;s modern note-taking experience</p>
-              <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2.5 px-6 py-3 btn-primary font-semibold rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35">
+              <h3 className="text-3xl font-bold text-primary mb-3 tracking-tight">
+                No notes yet
+              </h3>
+              <p className="text-secondary mb-8 text-center max-w-md leading-relaxed">
+                Start capturing your ideas and thoughts with CyberiaTech's
+                modern note-taking experience
+              </p>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-2.5 px-6 py-3 btn-primary font-semibold rounded-lg transition-smooth shadow-lg shadow-[var(--github-accent)]/25 hover:shadow-xl hover:shadow-[var(--github-accent)]/35"
+              >
                 <PlusIcon className="w-5 h-5" />
                 <span>Create Your First Note</span>
               </button>
@@ -577,14 +643,47 @@ export default function Page() {
         })()}
 
         {/* Create Note Button */}
-        {notes.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-50" ref={fabRef}>
+          {/* Dropdown Container */}
+          {isFabDropdownOpen && (
+            <div className="absolute bottom-16 right-0 w-48 bg-surface border border-default rounded-lg shadow-2xl overflow-hidden transition-all duration-200 origin-bottom-right">
+              <button
+                className="flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-[var(--github-accent)]/10 text-primary transition-colors duration-150"
+                onClick={() => {
+                  setIsFabDropdownOpen(false);
+                  setIsCreateModalOpen(true); // Action: Open Create Note Modal
+                }}
+              >
+                <DocumentTextIcon className="w-5 h-5 text-[var(--github-accent)]" />
+                Create Note
+              </button>
+              <button
+                className="flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-[var(--github-accent)]/10 text-primary transition-colors duration-150"
+                onClick={() => {
+                  setIsFabDropdownOpen(false);
+                  document.dispatchEvent(
+                    new CustomEvent("openCreateNotebookModal")
+                  ); // Action: Open Create Notebook Modal
+                }}
+                disabled={!token}
+              >
+                <PlusIcon className="w-5 h-5 text-[var(--github-accent)]" />
+                Create Notebook
+              </button>
+            </div>
+          )}
+
+          {/* FAB Button */}
           <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="fixed bottom-6 right-6 w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-xl transition-transform hover:scale-110"
+            onClick={() => setIsFabDropdownOpen((prev) => !prev)} // Action: Toggle the dropdown
+            className={`w-16 h-16 rounded-full bg-[var(--github-accent)] text-white flex items-center justify-center shadow-2xl transition-all duration-300 ${
+              isFabDropdownOpen ? "rotate-45 scale-110" : "hover:scale-110"
+            }`}
+            title="Create"
           >
-            <PlusIcon className="w-6 h-6" />
+            <PlusIcon className="w-7 h-7" />
           </button>
-        )}
+        </div>
       </>
 
       {/* Quick preview overlay */}
@@ -635,16 +734,36 @@ export default function Page() {
               <div className="text-xs text-secondary/80 flex flex-wrap items-center gap-3">
                 {formatNoteDate(previewing.createdAt) && (
                   <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7V5a3 3 0 016 0v2m5 4H5m14 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6"
+                      />
                     </svg>
                     <span>{formatNoteDate(previewing.createdAt)}</span>
                   </span>
                 )}
                 {previewing.time && (
                   <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     <span>{previewing.time}</span>
                   </span>
@@ -679,9 +798,19 @@ export default function Page() {
       {showToast && (
         <div className="fixed bottom-24 md:bottom-28 right-6 md:right-8 card px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2.5 anim-toast-in border-l-4 border-[var(--github-accent)] backdrop-blur-sm">
           <div className="w-2 h-2 rounded-full bg-[var(--github-accent)] animate-pulse" />
-          <span className="text-sm font-medium text-primary">Note created successfully</span>
-          <svg className="w-4 h-4 text-[var(--github-accent)]" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          <span className="text-sm font-medium text-primary">
+            Note created successfully
+          </span>
+          <svg
+            className="w-4 h-4 text-[var(--github-accent)]"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+              clipRule="evenodd"
+            />
           </svg>
         </div>
       )}
