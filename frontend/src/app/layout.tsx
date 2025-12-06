@@ -1,14 +1,13 @@
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { JetBrains_Mono, Montserrat } from 'next/font/google';
 import { ReactNode } from "react";
-import { ThemeProvider } from './components/ThemeProvider';
 import ConditionalLayout from './components/ConditionalLayout';
+import { ThemeProvider } from './components/ThemeProvider';
 import { WalletProvider } from './contexts/WalletContext';
 import "./globals.css";
-// Plus Jakarta Sans isn't available in next/font/google so we'll keep using it via CSS
 
-const inter = Inter({
+const montserrat = Montserrat({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-montserrat',
   display: 'swap',
 });
 
@@ -25,11 +24,8 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <head>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="flex h-screen text-[var(--github-text-primary)] bg-[var(--github-bg)] transition-colors overflow-hidden">
+    <html lang="en" className={`${montserrat.variable} ${jetbrainsMono.variable}`}>
+      <body className="flex h-screen text-[var(--github-text-primary)] bg-[var(--github-bg)] transition-colors overflow-hidden text-base" style={{ fontFamily: 'var(--font-montserrat)' }}>
         <WalletProvider>
           <ThemeProvider>
             <ConditionalLayout>{children}</ConditionalLayout>
