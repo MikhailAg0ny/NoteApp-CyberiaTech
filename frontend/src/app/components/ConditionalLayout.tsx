@@ -63,19 +63,11 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
             <Bars3Icon className={`w-6 h-6 ${textColor}`} />
           </button>
           <div className="flex items-center gap-2">
-            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none">
-              <rect width="24" height="24" rx="4" fill="url(#gradient)" />
-              <path d="M7 8h10M7 12h10M7 16h6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-              <defs>
-                <linearGradient id="gradient" x1="0" y1="0" x2="24" y2="24">
-                  <stop stopColor="#4F46E5" />
-                  <stop offset="1" stopColor="#7C3AED" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <span className={`text-lg font-semibold ${textPrimary} hidden sm:block`}>
-              Cyberia Tech
-            </span>
+            <img 
+              src={isDark ? "/cyberia.png" : "/cyberia1.png"}
+              alt="Cyberia Tech Logo" 
+              className="w-auto h-10 object-contain"
+            />
           </div>
         </div>
 
