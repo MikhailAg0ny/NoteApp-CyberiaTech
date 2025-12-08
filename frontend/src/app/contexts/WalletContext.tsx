@@ -28,6 +28,7 @@ const BLOCKFROST_PROJECT_ID =
     : undefined;
 
 const WALLET_PREFERENCES = [
+  { key: "lace", label: "Lace" },
   { key: "nami", label: "Nami" },
   { key: "eternl", label: "Eternl" },
   { key: "flint", label: "Flint" },
@@ -467,6 +468,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (!token) {
         throw new Error("Please sign in to link a wallet");
       }
+      if (linkedWallet?.wallet_address && linkedWallet.wallet_address !== addr) {
+        throw new Error("A wallet is already linked. Unlink it before connecting a different Lace account.");
+      }
       setAccountSyncing(true);
       try {
         const res = await fetch(`${API_BASE}/api/wallet/link`, {
@@ -483,7 +487,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(payload?.error || `Failed to link wallet (${res.status})`);
+          const message = payload?.error || `Failed to link wallet (${res.status})`;
+          setError(message);
+          throw new Error(message);
         }
         if (payload?.wallet?.wallet_address) {
           setLinkedWallet(payload.wallet);
@@ -494,7 +500,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setAccountSyncing(false);
       }
     },
-    [config, refreshBalance]
+    [config, refreshBalance, linkedWallet]
   );
 
   useEffect(() => {
@@ -550,6 +556,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (!bech32) {
           throw new Error("Unable to derive wallet address");
         }
+        if (
+          linkedWallet?.wallet_address &&
+          linkedWallet.wallet_address !== bech32
+        ) {
+          throw new Error(
+            "A different Lace account is already linked. Unlink it first before connecting another."
+          );
+        }
         setConnectedWallet({
           key,
           label: walletExt.name || key,
@@ -569,7 +583,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     },
-    [availableWallets, convertHexAddress, persistLinkedWallet, config]
+    [availableWallets, convertHexAddress, persistLinkedWallet, config, linkedWallet]
   );
 
   const disconnectWallet = useCallback(() => {
@@ -642,9 +656,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (trimmed.length < 20) {
         throw new Error("Address looks invalid");
       }
+      if (
+        linkedWallet?.wallet_address &&
+        linkedWallet.wallet_address !== trimmed
+      ) {
+        throw new Error(
+          "A different wallet is already linked. Unlink it before connecting another."
+        );
+      }
       await persistLinkedWallet(trimmed, label ?? null, network ?? null);
     },
-    [persistLinkedWallet]
+    [persistLinkedWallet, linkedWallet]
   );
 
   const submitAdaPayment = useCallback(
