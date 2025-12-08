@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
+import ConfirmModal from "./components/ConfirmModal";
 import ErrorDialog from "./components/ErrorDialog";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
@@ -31,6 +32,7 @@ type Note = {
   chain_action?: string | null;
   chain_label?: number | null;
   chain_metadata?: unknown;
+  deleted_at?: string | null;
 };
 
 type ApiNoteResponse = {
@@ -47,6 +49,7 @@ type ApiNoteResponse = {
   chain_action?: string | null;
   chain_label?: number | null;
   chain_metadata?: unknown;
+  deleted_at?: string | null;
 };
 
 type NotebookFilterDetail = {
@@ -77,6 +80,7 @@ const mapApiNote = (apiNote: ApiNoteResponse): Note => {
     chain_action: apiNote.chain_action ?? null,
     chain_label: apiNote.chain_label ?? null,
     chain_metadata: apiNote.chain_metadata ?? null,
+    deleted_at: apiNote.deleted_at ?? null,
   };
 };
 
@@ -93,8 +97,10 @@ export default function Page() {
   const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
     []
   );
+  const [trashNotes, setTrashNotes] = useState<Note[]>([]);
   const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [previewing, setPreviewing] = useState<Note | null>(null);
@@ -107,6 +113,7 @@ export default function Page() {
   const [errorDialog, setErrorDialog] = useState<
     { title: string; message: string } | null
   >(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<Note | null>(null);
   const wallet = useWallet();
   const {
     isEnabled: walletEnabled,
@@ -213,6 +220,27 @@ export default function Page() {
       showErrorDialog(err, "Failed to load notes");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTrash = async () => {
+    try {
+      if (!token) {
+        redirectToLogin();
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/notes/trash`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!res.ok) throw new Error(`Failed to load trash (${res.status})`);
+      const data = (await res.json()) as ApiNoteResponse[];
+      setTrashNotes(data.map(mapApiNote));
+    } catch (err) {
+      showErrorDialog(err, "Failed to load trash");
     }
   };
 
@@ -340,12 +368,19 @@ export default function Page() {
     newTitle: string,
     newContent: string,
     notebookId: number | null,
-    tagNames: string[]
+    tagNames: string[],
+    sendMetadata: boolean
   ) => {
     if (!newTitle.trim()) return;
+    if (sendMetadata) {
+      const proceed =
+        typeof window === "undefined" ||
+        window.confirm("Send this note's metadata to Cardano?");
+      if (!proceed) return;
+    }
     try {
       setError(null);
-      const txMeta = await maybeSubmitNoteTx("create", newContent);
+      const txMeta = sendMetadata ? await maybeSubmitNoteTx("create", newContent) : null;
       const res = await fetch(`${API_BASE}/api/notes`, {
         method: "POST",
         headers: {
@@ -386,11 +421,20 @@ export default function Page() {
       content: string;
       notebook_id: number | null;
       tags: string[];
+      sendMetadata: boolean;
     }
   ) => {
+    if (payload.sendMetadata) {
+      const proceed =
+        typeof window === "undefined" ||
+        window.confirm("Send this edit as Cardano metadata?");
+      if (!proceed) return;
+    }
     try {
       setError(null);
-      const txMeta = await maybeSubmitNoteTx("update", payload.content);
+      const txMeta = payload.sendMetadata
+        ? await maybeSubmitNoteTx("update", payload.content)
+        : null;
       const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "PUT",
         headers: {
@@ -436,7 +480,15 @@ export default function Page() {
         return;
       }
       if (!res.ok) throw new Error("Delete failed");
+      const payload = (await res.json()) as { id: number; deleted_at?: string };
       setNotes((prev) => prev.filter((n) => n.id !== id));
+      setTrashNotes((prev) => [
+        {
+          ...(selected && selected.id === id ? selected : (prev.find((n) => n.id === id) as Note) || { id, title: "", content: "" }),
+          deleted_at: payload.deleted_at || new Date().toISOString(),
+        },
+        ...prev.filter((n) => n.id !== id),
+      ]);
       if (selected?.id === id) {
         setSelected(null);
         setIsNoteModalOpen(false);
@@ -463,7 +515,15 @@ export default function Page() {
     document.addEventListener("openSettingsModal", handleOpenSettings);
     const handleFilterNotebook = (event: Event) => {
       const customEvent = event as CustomEvent<NotebookFilterDetail>;
-      setActiveNotebook(customEvent.detail?.notebookId ?? null);
+      const target = customEvent.detail?.notebookId as number | string | null;
+      if (target === "trash") {
+        setShowTrash(true);
+        setActiveNotebook(null);
+        fetchTrash();
+      } else {
+        setShowTrash(false);
+        setActiveNotebook((target as number) ?? null);
+      }
     };
     document.addEventListener("filterNotebook", handleFilterNotebook);
 
@@ -506,9 +566,44 @@ export default function Page() {
   const matchesNotebookFilter = (note: Note) =>
     !activeNotebook || note.notebook_id === activeNotebook;
 
-  const filteredNotes = notes.filter(
-    (note) => matchesNotebookFilter(note) && matchesTimeFilter(note)
-  );
+  const filteredNotes = showTrash
+    ? trashNotes
+    : notes.filter((note) => matchesNotebookFilter(note) && matchesTimeFilter(note));
+
+  const restoreNote = async (id: number) => {
+    try {
+      if (!token) return redirectToLogin();
+      const res = await fetch(`${API_BASE}/api/notes/${id}/restore`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) return redirectToLogin();
+      if (!res.ok) throw new Error("Restore failed");
+      const data = (await res.json()) as ApiNoteResponse;
+      const restored = mapApiNote(data);
+      setTrashNotes((prev) => prev.filter((n) => n.id !== id));
+      setNotes((prev) => [restored, ...prev]);
+    } catch (err) {
+      showErrorDialog(err, "Failed to restore note");
+    }
+  };
+
+  const deletePermanently = async (note: Note) => {
+    try {
+      if (!token) return redirectToLogin();
+      const res = await fetch(`${API_BASE}/api/notes/${note.id}/permanent`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) return redirectToLogin();
+      if (!res.ok) throw new Error("Permanent delete failed");
+      setTrashNotes((prev) => prev.filter((n) => n.id !== note.id));
+    } catch (err) {
+      showErrorDialog(err, "Failed to permanently delete note");
+    } finally {
+      setPermanentDeleteTarget(null);
+    }
+  };
 
   const formatNoteDate = (iso?: string | null) => {
     if (!iso) return null;
@@ -707,6 +802,82 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
+              </div>
+            );
+          }
+
+          if (showTrash) {
+            return (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-xl font-semibold text-primary tracking-tight flex items-center gap-2">
+                    Trash
+                    <span className="text-[11px] px-2 py-1 rounded-full bg-[var(--github-danger)]/10 text-[var(--github-danger)] border border-[var(--github-danger)]/30">
+                      Auto-purges after 30 days
+                    </span>
+                  </h2>
+                  <div className="text-sm text-secondary">
+                    {filteredNotes.length} trashed
+                  </div>
+                </div>
+                {filteredNotes.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {filteredNotes.map((note, idx) => (
+                      <div
+                        key={note.id}
+                        className="group relative card rounded-2xl p-5 shadow-lg overflow-hidden border border-dashed border-default anim-slide-up"
+                        style={{ animationDelay: `${idx * 60}ms` }}
+                      >
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[var(--github-danger)]/0 to-[var(--github-danger)]/0 opacity-0 group-hover:opacity-100 group-hover:from-[var(--github-danger)]/10 group-hover:to-transparent transition-all" />
+                        <div className="relative z-10 flex flex-col gap-3">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <h3 className="font-semibold text-lg text-primary truncate">
+                                {note.title}
+                              </h3>
+                              <button
+                                onClick={() => restoreNote(note.id)}
+                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:shadow hover:-translate-y-[1px] transition-smooth"
+                              >
+                                Restore
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 text-xs text-secondary">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--github-border)]/20 text-secondary border border-default">
+                                Deleted {note.deleted_at ? new Date(note.deleted_at).toLocaleString() : "just now"}
+                              </span>
+                              <span className="text-[10px] uppercase tracking-wide text-[var(--github-danger)]/80 font-semibold">
+                                Auto purge in 30 days
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setPermanentDeleteTarget(note)}
+                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[11px] font-semibold text-[var(--github-danger)] bg-[var(--github-danger)]/10 border border-[var(--github-danger)]/30 hover:bg-[var(--github-danger)]/20 hover:-translate-y-[1px] transition-smooth"
+                            >
+                              Delete permanently
+                            </button>
+                          </div>
+                          <p className="text-secondary line-clamp-3 text-sm leading-relaxed">
+                            {note.content || "No content"}
+                          </p>
+                          <div className="text-[11px] text-secondary/80 flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--github-danger)]/15 text-[var(--github-danger)] border border-[var(--github-danger)]/30">
+                              Removed
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--github-accent)]/10 text-[var(--github-accent)] border border-[var(--github-accent)]/30">
+                              Trash
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="card rounded-2xl p-8 text-center border border-dashed border-default text-secondary">
+                    <p className="font-medium text-primary mb-2">Trash is empty</p>
+                    <p className="text-sm">Deleted notes stay here for 30 days before permanent removal.</p>
+                  </div>
+                )}
               </div>
             );
           }
@@ -1073,6 +1244,16 @@ export default function Page() {
         }}
         onSave={saveNoteChanges}
         onDelete={deleteNote}
+      />
+      <ConfirmModal
+        isOpen={!!permanentDeleteTarget}
+        message={`Permanently delete "${permanentDeleteTarget?.title || "this note"}"? This cannot be undone.`}
+        onCancel={() => setPermanentDeleteTarget(null)}
+        onConfirm={() => {
+          if (permanentDeleteTarget) {
+            deletePermanently(permanentDeleteTarget);
+          }
+        }}
       />
     </div>
   );

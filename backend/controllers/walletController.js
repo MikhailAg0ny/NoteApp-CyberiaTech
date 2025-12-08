@@ -102,6 +102,17 @@ exports.linkWallet = async (req, res) => {
     }
     const normalizedNetwork = (network || 'mainnet').toLowerCase();
 
+    const existing = await pool.query(
+      `SELECT wallet_address FROM users WHERE user_id=$1`,
+      [userId]
+    );
+    const currentAddress = existing.rows?.[0]?.wallet_address;
+    if (currentAddress && currentAddress !== normalizedAddress) {
+      return res.status(409).json({
+        error: 'a different wallet is already linked to this account; unlink before linking another',
+      });
+    }
+
     const result = await pool.query(
       `UPDATE users SET
          wallet_address=$1,

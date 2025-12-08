@@ -23,7 +23,7 @@ interface NoteModalProps {
   note: NoteRecord | null;
   notebooks: { id: number; name: string }[];
   onClose: () => void;
-  onSave: (noteId: number, payload: { title: string; content: string; notebook_id: number | null; tags: string[] }) => Promise<void> | void;
+  onSave: (noteId: number, payload: { title: string; content: string; notebook_id: number | null; tags: string[]; sendMetadata: boolean }) => Promise<void> | void;
   onDelete: (noteId: number) => Promise<void> | void;
 }
 
@@ -34,6 +34,7 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [sendMetadata, setSendMetadata] = useState(false);
 
   useEffect(() => {
     if (open && note) {
@@ -43,6 +44,7 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
       setTags((note.tags || []).map(t => t.name));
       setTagInput('');
       setDirty(false);
+      setSendMetadata(false);
     }
   }, [open, note]);
 
@@ -90,7 +92,7 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
 
   const commitSave = () => {
     if (!title.trim()) return;
-    onSave(note.id, { title, content, notebook_id: notebookId, tags });
+    onSave(note.id, { title, content, notebook_id: notebookId, tags, sendMetadata });
     setDirty(false);
   };
 
@@ -240,7 +242,25 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
                 </div>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center flex-wrap justify-end">
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-dashed border-default bg-[var(--github-bg-secondary)]/50 text-xs text-secondary">
+                <div className="w-8 h-8 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] flex items-center justify-center text-sm font-bold">
+                  ⓜ
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary text-[11px]">Cardano metadata</p>
+                  <p className="text-[11px] text-secondary/80">Send this edit to chain when saving.</p>
+                </div>
+                <label className="flex items-center gap-2 text-xs font-semibold text-secondary cursor-pointer select-none ml-auto">
+                  <input
+                    type="checkbox"
+                    checked={sendMetadata}
+                    onChange={(e) => { setSendMetadata(e.target.checked); setDirty(true); }}
+                    className="w-4 h-4 rounded border-default text-[var(--github-accent)] focus:ring-[var(--github-accent)]"
+                  />
+                  <span className="text-[11px]">Send on save</span>
+                </label>
+              </div>
               <button
                 onClick={() => { if (confirm('Delete this note permanently?')) onDelete(note.id); }}
                 className="px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 bg-[var(--github-danger)]/10 text-[var(--github-danger)] hover:bg-[var(--github-danger)]/20 transition-smooth active:scale-95"
