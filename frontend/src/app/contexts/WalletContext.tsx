@@ -142,6 +142,7 @@ interface WalletContextValue {
   disconnectWallet: () => void;
   unlinkWallet: () => Promise<void>;
   syncLinkedWallet: () => Promise<void>;
+  clearError: () => void;
   getWalletApi: () => Cip30WalletApi | null;
   setSelectedNetwork: (network: string) => void;
   linkWalletManually: (args: ManualLinkArgs) => Promise<void>;
@@ -628,6 +629,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [linkedWallet]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   const getWalletApi = useCallback(() => walletApiRef.current, []);
 
   const linkWalletManually = useCallback(
@@ -814,6 +817,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       unlinkWallet,
       syncLinkedWallet,
+      clearError,
       getWalletApi,
       linkWalletManually,
       submitAdaPayment,
@@ -848,6 +852,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       unlinkWallet,
       syncLinkedWallet,
+      clearError,
       getWalletApi,
       linkWalletManually,
       submitAdaPayment,

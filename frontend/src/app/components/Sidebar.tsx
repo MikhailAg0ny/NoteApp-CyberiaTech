@@ -90,6 +90,7 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
     fetchNotebooks();
   }, [token, API_BASE]);
 
+
   useEffect(() => {
     const handleNotebookCreated = (e: any) => {
       const newNotebook = e.detail;

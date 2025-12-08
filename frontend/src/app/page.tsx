@@ -4,9 +4,11 @@ import {
   DocumentTextIcon,
   PlusIcon,
   TrashIcon,
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
+import ErrorDialog from "./components/ErrorDialog";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
 import ManualWalletPanel from "./components/ManualWalletPanel";
@@ -91,6 +93,7 @@ export default function Page() {
   const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
     []
   );
+  const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -101,6 +104,9 @@ export default function Page() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDialog, setErrorDialog] = useState<
+    { title: string; message: string } | null
+  >(null);
   const wallet = useWallet();
   const {
     isEnabled: walletEnabled,
@@ -108,6 +114,7 @@ export default function Page() {
     address: walletAddress,
     balanceAda: walletBalance,
     error: walletError,
+    clearError: clearWalletError,
     browserMnemonic,
     browserAddress,
     linkedWallet,
@@ -125,10 +132,57 @@ export default function Page() {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
+  const showErrorDialog = useCallback(
+    (err: unknown, title?: string) => {
+      const message = typeof err === "string" ? err : getErrorMessage(err);
+      setError(message);
+      setErrorDialog({
+        title: title || "Something went wrong",
+        message,
+      });
+    },
+    []
+  );
+
+  const dismissError = useCallback(() => {
+    setErrorDialog(null);
+    setError(null);
+    clearWalletError();
+  }, [clearWalletError]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const loadProfile = () => {
+      const email = localStorage.getItem("user_email");
+      const name = localStorage.getItem("user_name");
+      if (email) {
+        setUserProfile({ name: name || email.split("@")[0], email });
+      } else {
+        setUserProfile(null);
+      }
+    };
+    loadProfile();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "user_email" || event.key === "user_name") {
+        loadProfile();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    if (walletError) {
+      showErrorDialog(walletError, "Wallet error");
+    }
+  }, [walletError, showErrorDialog]);
+
   const redirectToLogin = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user_id");
+      localStorage.removeItem("user_name");
+      localStorage.removeItem("user_email");
       window.location.href = "/login";
     }
   };
@@ -156,7 +210,7 @@ export default function Page() {
       const mapped: Note[] = data.map(mapApiNote);
       setNotes(mapped);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to load notes");
     } finally {
       setLoading(false);
     }
@@ -206,7 +260,7 @@ export default function Page() {
         chain_metadata: result.metadata,
       } as const;
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Cardano metadata error");
       return null;
     }
   };
@@ -236,7 +290,7 @@ export default function Page() {
         prev && prev.id === note.id ? { ...prev, ...normalized } : prev
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to update note status");
     }
   };
 
@@ -320,7 +374,7 @@ export default function Page() {
       setSelected(note);
       setIsNoteModalOpen(true);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to create note");
     }
   };
 
@@ -365,7 +419,7 @@ export default function Page() {
         prev && prev.id === noteId ? { ...prev, ...normalized } : prev
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to update note");
     }
   };
 
@@ -388,7 +442,7 @@ export default function Page() {
         setIsNoteModalOpen(false);
       }
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to delete note");
     }
   };
 
@@ -503,6 +557,12 @@ export default function Page() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+      <ErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title}
+        message={errorDialog?.message}
+        onClose={dismissError}
+      />
 
       {/* Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
@@ -524,31 +584,50 @@ export default function Page() {
           )}
         </div>
 
-        {/* Filters + Logout */}
-        <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
-          {filters.map((filter) => (
+        <div className="flex items-center gap-3">
+          {userProfile && (
+            <div className="hidden md:flex items-center gap-3 bg-surface border border-default rounded-full px-3 py-1.5 shadow-sm">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--github-accent)] to-[var(--github-accent-hover)] flex items-center justify-center text-white shadow-lg">
+                <UserCircleIcon className="w-5 h-5" />
+              </div>
+              <div className="leading-tight min-w-0">
+                <div className="text-sm font-semibold text-primary truncate">
+                  {userProfile.name || userProfile.email}
+                </div>
+                <div className="text-[11px] text-secondary truncate max-w-[180px]">
+                  {userProfile.email}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Filters + Logout */}
+          <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
+            {filters.map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`px-4 md:px-5 py-1.5 rounded-full text-sm font-medium transition-smooth ${
+                  activeFilter === filter
+                    ? "bg-[var(--github-accent)] text-white shadow-lg shadow-[var(--github-accent)]/25"
+                    : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
             <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 md:px-5 py-1.5 rounded-full text-sm font-medium transition-smooth ${
-                activeFilter === filter
-                  ? "bg-[var(--github-accent)] text-white shadow-lg shadow-[var(--github-accent)]/25"
-                  : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-              }`}
+              onClick={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user_id");
+                localStorage.removeItem("user_name");
+                localStorage.removeItem("user_email");
+                window.location.href = "/login";
+              }}
+              className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
             >
-              {filter}
+              Logout
             </button>
-          ))}
-          <button
-            onClick={() => {
-              localStorage.removeItem("token");
-              localStorage.removeItem("user_id");
-              window.location.href = "/login";
-            }}
-            className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
-          >
-            Logout
-          </button>
+          </div>
         </div>
       </div>
 
