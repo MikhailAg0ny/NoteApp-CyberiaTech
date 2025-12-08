@@ -42,8 +42,10 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user_id", String(data.user.user_id));
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user_id", String(data.user.user_id));
+        localStorage.setItem("user_name", data.user.username || '');
+        localStorage.setItem("user_email", data.user.email || '');
       if (typeof window !== "undefined") {
         sessionStorage.setItem("playSplashAfterLogin", "true");
       }

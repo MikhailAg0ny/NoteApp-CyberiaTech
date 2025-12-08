@@ -33,6 +33,8 @@ const WALLET_PREFERENCES = [
   { key: "flint", label: "Flint" },
 ];
 
+const DEFAULT_METADATA_LABEL = 42819n;
+
 type DetectedWallet = {
   key: string;
   label: string;
@@ -57,6 +59,14 @@ type LinkedWalletRecord = {
 type SubmitAdaArgs = {
   recipient: string;
   amountLovelace: bigint;
+};
+
+type SubmitNoteArgs = {
+  action: string;
+  noteContent: string;
+  targetAddress?: string;
+  lovelaceAmount?: bigint;
+  label?: bigint;
 };
 
 type RelaySignedTxResult = {
@@ -119,6 +129,7 @@ interface WalletContextValue {
   address: string | null;
   balanceAda: number | null;
   lovelace: string | null;
+  selectedNetwork: string;
   loading: boolean;
   error: string | null;
   config: WalletConfig | null;
@@ -131,9 +142,17 @@ interface WalletContextValue {
   disconnectWallet: () => void;
   unlinkWallet: () => Promise<void>;
   syncLinkedWallet: () => Promise<void>;
+  clearError: () => void;
   getWalletApi: () => Cip30WalletApi | null;
+  setSelectedNetwork: (network: string) => void;
   linkWalletManually: (args: ManualLinkArgs) => Promise<void>;
   submitAdaPayment: (args: SubmitAdaArgs) => Promise<{ txHash: string }>;
+  submitNoteTransaction: (args: SubmitNoteArgs) => Promise<{
+    txHash: string;
+    cardanoAddress: string;
+    label: number;
+    metadata: { action: string; note: string; created_at: string };
+  }>;
   relaySignedTransaction: (cbor: string) => Promise<RelaySignedTxResult>;
   refreshBalance: (customAddress?: string) => Promise<void>;
   loadTransactions: (addressOverride?: string) => Promise<void>;
@@ -157,6 +176,17 @@ const hexToBytes = (hex: string | undefined | null) => {
   return bytes;
 };
 
+const formatContent = (content: string) => {
+  const safe = content || "";
+  if (safe.length <= 64) {
+    return Core.Metadatum.newText(safe);
+  }
+  const chunks = safe.match(/.{1,64}/g) || [];
+  const list = new Core.MetadatumList();
+  chunks.forEach((chunk) => list.add(Core.Metadatum.newText(chunk)));
+  return Core.Metadatum.newList(list);
+};
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [availableWallets, setAvailableWallets] = useState<DetectedWallet[]>([]);
   const [connectedWallet, setConnectedWallet] = useState<DetectedWallet | null>(
@@ -168,6 +198,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<WalletConfig | null>(null);
+  const [selectedNetwork, setSelectedNetworkState] = useState<string>("preview");
   const [isReady, setIsReady] = useState(false);
   const [linkedWallet, setLinkedWallet] = useState<LinkedWalletRecord | null>(null);
   const [accountSyncing, setAccountSyncing] = useState(false);
@@ -183,6 +214,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     addressRef.current = address;
   }, [address]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("wallet_network_preference");
+    if (saved) setSelectedNetworkState(saved.toLowerCase());
+  }, []);
 
   const detectWallets = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -207,6 +244,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     setAvailableWallets(detected.filter((wallet) => wallet.installed));
     setIsReady(true);
+  }, []);
+
+  const setSelectedNetwork = useCallback((network: string) => {
+    const normalized = (network || "preview").toLowerCase();
+    setSelectedNetworkState(normalized);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wallet_network_preference", normalized);
+    }
   }, []);
 
   useEffect(() => {
@@ -264,6 +309,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               data.blockfrostNetworkName || `cardano-${data.network || "preprod"}`,
             hasApiKey: Boolean(data.hasApiKey),
           });
+          const preferred =
+            (typeof window !== "undefined" &&
+              localStorage.getItem("wallet_network_preference")) ||
+            data.network ||
+            "preview";
+          setSelectedNetworkState(preferred.toLowerCase());
         }
       })
       .catch(() => {
@@ -578,6 +629,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [linkedWallet]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   const getWalletApi = useCallback(() => walletApiRef.current, []);
 
   const linkWalletManually = useCallback(
@@ -617,9 +670,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const providerNetwork =
-          (config.blockfrostNetworkName as BlockfrostNetwork) ||
-          "cardano-preprod";
+        const providerNetwork = ((): BlockfrostNetwork => {
+          if (selectedNetwork === "mainnet") return "cardano-mainnet";
+          if (selectedNetwork === "preprod") return "cardano-preprod";
+          return "cardano-preview";
+        })();
         const provider = new Blockfrost({
           network: providerNetwork,
           projectId: BLOCKFROST_PROJECT_ID,
@@ -641,7 +696,77 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw new Error(message);
       }
     },
-    [config]
+    [config, selectedNetwork]
+  );
+
+  const submitNoteTransaction = useCallback(
+    async ({ action, noteContent, targetAddress, lovelaceAmount, label }: SubmitNoteArgs) => {
+      if (!ENABLE_WALLET) {
+        throw new Error("Wallet features are disabled");
+      }
+      const api = walletApiRef.current;
+      if (!api) {
+        throw new Error("Connect a browser wallet before sending a note transaction");
+      }
+      if (!config?.blockfrostNetworkName) {
+        throw new Error("Wallet network configuration missing");
+      }
+      if (!BLOCKFROST_PROJECT_ID) {
+        throw new Error("NEXT_PUBLIC_BLOCKFROST_PROJECT_ID is not configured");
+      }
+      const senderAddress = targetAddress || addressRef.current;
+      if (!senderAddress) {
+        throw new Error("No wallet address available for this transaction");
+      }
+
+      try {
+        const providerNetwork = ((): BlockfrostNetwork => {
+          if (selectedNetwork === "mainnet") return "cardano-mainnet";
+          if (selectedNetwork === "preprod") return "cardano-preprod";
+          return "cardano-preview";
+        })();
+        const provider = new Blockfrost({
+          network: providerNetwork,
+          projectId: BLOCKFROST_PROJECT_ID,
+        });
+        const wallet = new WebWallet(api);
+        const blaze = await Blaze.from(provider, wallet);
+
+        const chosenLabel = label ?? DEFAULT_METADATA_LABEL;
+        const metadataMap = new Map<bigint, import("@blaze-cardano/sdk").Core.Metadatum>();
+        const mdMap = new Core.MetadatumMap();
+        mdMap.insert(Core.Metadatum.newText("action"), Core.Metadatum.newText(action));
+        mdMap.insert(Core.Metadatum.newText("note"), formatContent(noteContent || ""));
+        const createdAt = new Date().toISOString();
+        mdMap.insert(Core.Metadatum.newText("created_at"), Core.Metadatum.newText(createdAt));
+        const metadatum = Core.Metadatum.newMap(mdMap);
+        metadataMap.set(chosenLabel, metadatum);
+        const finalMetadata = new Core.Metadata(metadataMap);
+
+        const tx = await blaze
+          .newTransaction()
+          .payLovelace(
+            Core.Address.fromBech32(senderAddress),
+            lovelaceAmount ?? BigInt(1_500_000)
+          )
+          .setMetadata(finalMetadata)
+          .complete();
+
+        const signedTx = await blaze.signTransaction(tx);
+        const txHash = await blaze.provider.postTransactionToChain(signedTx);
+        return {
+          txHash: `${txHash ?? ""}`,
+          cardanoAddress: senderAddress,
+          label: Number(chosenLabel),
+          metadata: { action, note: noteContent, created_at: createdAt },
+        };
+      } catch (err) {
+        const message = getErrorMessage(err, "Failed to submit note transaction");
+        setError(message);
+        throw err instanceof Error ? err : new Error(message);
+      }
+    },
+    [config, selectedNetwork]
   );
 
   const relaySignedTransaction = useCallback(
@@ -692,15 +817,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       unlinkWallet,
       syncLinkedWallet,
+      clearError,
       getWalletApi,
       linkWalletManually,
       submitAdaPayment,
+      submitNoteTransaction,
       relaySignedTransaction,
       refreshBalance,
       loadTransactions,
       browserMnemonic,
       browserAddress,
       clearBrowserMnemonic,
+      selectedNetwork,
+      setSelectedNetwork,
     }),
     [
       address,
@@ -723,13 +852,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       unlinkWallet,
       syncLinkedWallet,
+      clearError,
       getWalletApi,
       linkWalletManually,
       submitAdaPayment,
+      submitNoteTransaction,
       relaySignedTransaction,
       browserMnemonic,
       browserAddress,
       clearBrowserMnemonic,
+      selectedNetwork,
+      setSelectedNetwork,
     ]
   );
 

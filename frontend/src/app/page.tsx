@@ -4,9 +4,11 @@ import {
   DocumentTextIcon,
   PlusIcon,
   TrashIcon,
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
+import ErrorDialog from "./components/ErrorDialog";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
 import ManualWalletPanel from "./components/ManualWalletPanel";
@@ -23,6 +25,12 @@ type Note = {
   date?: string;
   time?: string;
   createdAt?: string | null;
+  tx_hash?: string | null;
+  tx_status?: string | null;
+  cardano_address?: string | null;
+  chain_action?: string | null;
+  chain_label?: number | null;
+  chain_metadata?: unknown;
 };
 
 type ApiNoteResponse = {
@@ -33,6 +41,12 @@ type ApiNoteResponse = {
   notebook_name?: string | null;
   tags?: { id?: number; name: string }[];
   created_at?: string | null;
+  tx_hash?: string | null;
+  tx_status?: string | null;
+  cardano_address?: string | null;
+  chain_action?: string | null;
+  chain_label?: number | null;
+  chain_metadata?: unknown;
 };
 
 type NotebookFilterDetail = {
@@ -57,6 +71,12 @@ const mapApiNote = (apiNote: ApiNoteResponse): Note => {
         })
       : undefined,
     createdAt,
+    tx_hash: apiNote.tx_hash ?? null,
+    tx_status: apiNote.tx_status ?? null,
+    cardano_address: apiNote.cardano_address ?? null,
+    chain_action: apiNote.chain_action ?? null,
+    chain_label: apiNote.chain_label ?? null,
+    chain_metadata: apiNote.chain_metadata ?? null,
   };
 };
 
@@ -73,6 +93,7 @@ export default function Page() {
   const [notebooks, setNotebooks] = useState<{ id: number; name: string }[]>(
     []
   );
+  const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -83,6 +104,9 @@ export default function Page() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDialog, setErrorDialog] = useState<
+    { title: string; message: string } | null
+  >(null);
   const wallet = useWallet();
   const {
     isEnabled: walletEnabled,
@@ -90,22 +114,75 @@ export default function Page() {
     address: walletAddress,
     balanceAda: walletBalance,
     error: walletError,
+    clearError: clearWalletError,
     browserMnemonic,
     browserAddress,
     linkedWallet,
+    submitNoteTransaction,
+    getWalletApi,
+    config: walletConfig,
+    selectedNetwork,
   } = wallet;
   const manualAddress = linkedWallet?.wallet_address || browserAddress || null;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+  const BLOCKFROST_PROJECT_ID = process.env.NEXT_PUBLIC_BLOCKFROST_PROJECT_ID;
   const [isFabDropdownOpen, setIsFabDropdownOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement>(null);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
+  const showErrorDialog = useCallback(
+    (err: unknown, title?: string) => {
+      const message = typeof err === "string" ? err : getErrorMessage(err);
+      setError(message);
+      setErrorDialog({
+        title: title || "Something went wrong",
+        message,
+      });
+    },
+    []
+  );
+
+  const dismissError = useCallback(() => {
+    setErrorDialog(null);
+    setError(null);
+    clearWalletError();
+  }, [clearWalletError]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const loadProfile = () => {
+      const email = localStorage.getItem("user_email");
+      const name = localStorage.getItem("user_name");
+      if (email) {
+        setUserProfile({ name: name || email.split("@")[0], email });
+      } else {
+        setUserProfile(null);
+      }
+    };
+    loadProfile();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "user_email" || event.key === "user_name") {
+        loadProfile();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    if (walletError) {
+      showErrorDialog(walletError, "Wallet error");
+    }
+  }, [walletError, showErrorDialog]);
+
   const redirectToLogin = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user_id");
+      localStorage.removeItem("user_name");
+      localStorage.removeItem("user_email");
       window.location.href = "/login";
     }
   };
@@ -133,7 +210,7 @@ export default function Page() {
       const mapped: Note[] = data.map(mapApiNote);
       setNotes(mapped);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to load notes");
     } finally {
       setLoading(false);
     }
@@ -164,6 +241,100 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const maybeSubmitNoteTx = async (action: string, noteContent: string) => {
+    if (!walletEnabled) return null;
+    const api = getWalletApi?.();
+    if (!api || !connectedWallet) return null;
+    try {
+      const result = await submitNoteTransaction({
+        action,
+        noteContent,
+        targetAddress: walletAddress || undefined,
+      });
+      return {
+        tx_hash: result.txHash,
+        tx_status: "pending",
+        cardano_address: result.cardanoAddress,
+        chain_action: action,
+        chain_label: result.label,
+        chain_metadata: result.metadata,
+      } as const;
+    } catch (err) {
+      showErrorDialog(err, "Cardano metadata error");
+      return null;
+    }
+  };
+
+  const markNoteConfirmed = async (note: Note) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/notes/${note.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: note.title,
+          content: note.content,
+          notebook_id: note.notebook_id ?? null,
+          tags: (note.tags || []).map((t) => t.name),
+          tx_status: "confirmed",
+        }),
+      });
+      if (!res.ok) return;
+      const updated = (await res.json()) as ApiNoteResponse;
+      const normalized = mapApiNote(updated);
+      setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, ...normalized } : n)));
+      setSelected((prev) =>
+        prev && prev.id === note.id ? { ...prev, ...normalized } : prev
+      );
+    } catch (err) {
+      showErrorDialog(err, "Failed to update note status");
+    }
+  };
+
+  const refreshPendingStatuses = useCallback(async () => {
+    if (!BLOCKFROST_PROJECT_ID) return;
+    const pending = notes.filter(
+      (n) => n.tx_hash && (n.tx_status || "").toLowerCase() === "pending"
+    );
+    if (!pending.length) return;
+    const baseUrl = walletConfig?.blockfrostUrl ||
+      (selectedNetwork === "mainnet"
+        ? "https://cardano-mainnet.blockfrost.io/api/v0"
+        : selectedNetwork === "preprod"
+        ? "https://cardano-preprod.blockfrost.io/api/v0"
+        : "https://cardano-preview.blockfrost.io/api/v0");
+    for (const note of pending) {
+      try {
+        const res = await fetch(`${baseUrl}/txs/${note.tx_hash}`, {
+          headers: {
+            project_id: BLOCKFROST_PROJECT_ID,
+          },
+        });
+        if (res.ok) {
+          await markNoteConfirmed(note);
+        }
+      } catch (err) {
+        console.warn("tx status check failed", err);
+      }
+    }
+  }, [BLOCKFROST_PROJECT_ID, notes, walletConfig?.blockfrostUrl, selectedNetwork]);
+
+  useEffect(() => {
+    if (!BLOCKFROST_PROJECT_ID) return;
+    const hasPending = notes.some(
+      (n) => n.tx_hash && (n.tx_status || "").toLowerCase() === "pending"
+    );
+    if (!hasPending) return;
+    const interval = setInterval(() => {
+      refreshPendingStatuses();
+    }, 25000);
+    refreshPendingStatuses();
+    return () => clearInterval(interval);
+  }, [BLOCKFROST_PROJECT_ID, notes, refreshPendingStatuses]);
+
   // Create note (calls backend)
   const addNote = async (
     newTitle: string,
@@ -174,6 +345,7 @@ export default function Page() {
     if (!newTitle.trim()) return;
     try {
       setError(null);
+      const txMeta = await maybeSubmitNoteTx("create", newContent);
       const res = await fetch(`${API_BASE}/api/notes`, {
         method: "POST",
         headers: {
@@ -185,6 +357,7 @@ export default function Page() {
           content: newContent,
           notebook_id: notebookId,
           tags: tagNames,
+          ...(txMeta ? txMeta : {}),
         }),
       });
       if (res.status === 401) {
@@ -201,7 +374,7 @@ export default function Page() {
       setSelected(note);
       setIsNoteModalOpen(true);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to create note");
     }
   };
 
@@ -217,6 +390,7 @@ export default function Page() {
   ) => {
     try {
       setError(null);
+      const txMeta = await maybeSubmitNoteTx("update", payload.content);
       const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "PUT",
         headers: {
@@ -228,6 +402,7 @@ export default function Page() {
           content: payload.content,
           notebook_id: payload.notebook_id,
           tags: payload.tags,
+          ...(txMeta ? txMeta : {}),
         }),
       });
       if (res.status === 401) {
@@ -244,7 +419,7 @@ export default function Page() {
         prev && prev.id === noteId ? { ...prev, ...normalized } : prev
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to update note");
     }
   };
 
@@ -267,7 +442,7 @@ export default function Page() {
         setIsNoteModalOpen(false);
       }
     } catch (err) {
-      setError(getErrorMessage(err));
+      showErrorDialog(err, "Failed to delete note");
     }
   };
 
@@ -346,6 +521,29 @@ export default function Page() {
     });
   };
 
+  const getStatusBadge = (status?: string | null) => {
+    if (!status) return null;
+    const normalized = status.toLowerCase();
+    if (normalized === "confirmed") {
+      return {
+        label: "Confirmed",
+        className:
+          "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40",
+      };
+    }
+    if (normalized === "pending") {
+      return {
+        label: "Pending",
+        className:
+          "bg-amber-500/15 text-amber-300 border border-amber-500/40",
+      };
+    }
+    return {
+      label: status,
+      className: "bg-surface border border-default text-secondary",
+    };
+  };
+
   return (
     <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
       {/* Create Note Modal */}
@@ -358,6 +556,12 @@ export default function Page() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+      <ErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title}
+        message={errorDialog?.message}
+        onClose={dismissError}
       />
 
       {/* Header with title */}
@@ -380,31 +584,50 @@ export default function Page() {
           )}
         </div>
 
-        {/* Filters + Logout */}
-        <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
-          {filters.map((filter) => (
+        <div className="flex items-center gap-3">
+          {userProfile && (
+            <div className="hidden md:flex items-center gap-3 bg-surface border border-default rounded-full px-3 py-1.5 shadow-sm">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--github-accent)] to-[var(--github-accent-hover)] flex items-center justify-center text-white shadow-lg">
+                <UserCircleIcon className="w-5 h-5" />
+              </div>
+              <div className="leading-tight min-w-0">
+                <div className="text-sm font-semibold text-primary truncate">
+                  {userProfile.name || userProfile.email}
+                </div>
+                <div className="text-[11px] text-secondary truncate max-w-[180px]">
+                  {userProfile.email}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Filters + Logout */}
+          <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
+            {filters.map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`px-4 md:px-5 py-1.5 rounded-full text-sm font-medium transition-smooth ${
+                  activeFilter === filter
+                    ? "bg-[var(--github-accent)] text-white shadow-lg shadow-[var(--github-accent)]/25"
+                    : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
             <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 md:px-5 py-1.5 rounded-full text-sm font-medium transition-smooth ${
-                activeFilter === filter
-                  ? "bg-[var(--github-accent)] text-white shadow-lg shadow-[var(--github-accent)]/25"
-                  : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-              }`}
+              onClick={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user_id");
+                localStorage.removeItem("user_name");
+                localStorage.removeItem("user_email");
+                window.location.href = "/login";
+              }}
+              className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
             >
-              {filter}
+              Logout
             </button>
-          ))}
-          <button
-            onClick={() => {
-              localStorage.removeItem("token");
-              localStorage.removeItem("user_id");
-              window.location.href = "/login";
-            }}
-            className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
-          >
-            Logout
-          </button>
+          </div>
         </div>
       </div>
 
@@ -515,6 +738,16 @@ export default function Page() {
                               <h3 className="font-semibold text-lg text-primary truncate transition-colors group-hover:text-[var(--github-accent)]">
                                 {note.title}
                               </h3>
+                              {(() => {
+                                const badge = getStatusBadge(note.tx_status);
+                                return badge ? (
+                                  <span
+                                    className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${badge.className}`}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                ) : null;
+                              })()}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -716,6 +949,21 @@ export default function Page() {
               {previewing.content || "No content"}
             </p>
             <div className="flex flex-wrap gap-2 mb-6">
+              {(() => {
+                const badge = getStatusBadge(previewing.tx_status);
+                return badge ? (
+                  <span
+                    className={`text-[11px] px-3 py-1 rounded-full font-semibold ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                ) : null;
+              })()}
+              {previewing.tx_hash && (
+                <span className="text-[11px] font-mono text-secondary truncate max-w-xs" title={previewing.tx_hash}>
+                  Tx: {previewing.tx_hash.slice(0, 10)}…
+                </span>
+              )}
               {previewing.notebook_name && (
                 <span className="text-[11px] px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">
                   {previewing.notebook_name}

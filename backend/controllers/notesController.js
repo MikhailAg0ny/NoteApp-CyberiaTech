@@ -34,9 +34,23 @@ exports.getSingleNote = async (req, res) => {
 exports.createNote = async (req, res) => {
   try {
     const userId = requireUser(req, res); if (!userId) return;
-    const { title, content, notebook_id, tags } = req.body;
+    const { title, content, notebook_id, tags, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const note = await noteModel.createNote(userId, notebook_id, title, content, Array.isArray(tags) ? tags : []);
+    const note = await noteModel.createNote(
+      userId,
+      notebook_id,
+      title,
+      content,
+      Array.isArray(tags) ? tags : [],
+      {
+        tx_hash: tx_hash || null,
+        tx_status: tx_status || 'pending',
+        cardano_address: cardano_address || null,
+        chain_action: chain_action || 'create',
+        chain_label: chain_label || null,
+        chain_metadata: chain_metadata || null,
+      }
+    );
     res.status(201).json(note);
   } catch (err) {
     console.error('POST /api/notes failed:', err);
@@ -48,9 +62,24 @@ exports.updateNote = async (req, res) => {
   try {
     const userId = requireUser(req, res); if (!userId) return;
     const id = parseInt(req.params.id, 10);
-    const { title, content, notebook_id, tags } = req.body;
+    const { title, content, notebook_id, tags, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
-    const updated = await noteModel.updateNote(userId, id, title, content, notebook_id, Array.isArray(tags) ? tags : undefined);
+    const updated = await noteModel.updateNote(
+      userId,
+      id,
+      title,
+      content,
+      notebook_id,
+      Array.isArray(tags) ? tags : undefined,
+      {
+        tx_hash: tx_hash || null,
+        tx_status: tx_status || 'pending',
+        cardano_address: cardano_address || null,
+        chain_action: chain_action || 'update',
+        chain_label: chain_label || null,
+        chain_metadata: chain_metadata || null,
+      }
+    );
     if (!updated) return res.status(404).json({ error: 'note not found' });
     res.json(updated);
   } catch (err) {
