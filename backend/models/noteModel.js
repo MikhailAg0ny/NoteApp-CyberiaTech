@@ -1,6 +1,7 @@
 const pool = require('../db');
 
 let schemaMode = null; // 'multi' | 'simple'
+let supportsSoftDelete = false;
 
 async function detectSchema() {
   if (schemaMode) return schemaMode;
@@ -9,6 +10,7 @@ async function detectSchema() {
   if (names.includes('note_id') && names.includes('user_id')) schemaMode = 'multi';
   else if (names.includes('id')) schemaMode = 'simple';
   else schemaMode = 'simple';
+  supportsSoftDelete = names.includes('deleted_at');
   return schemaMode;
 }
 
@@ -30,6 +32,7 @@ function mapRow(row) {
       chain_metadata: row.chain_metadata || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      deleted_at: row.deleted_at || null,
       tags: row.tags || []
     };
   }
@@ -48,6 +51,7 @@ function mapRow(row) {
     chain_metadata: row.chain_metadata || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    deleted_at: row.deleted_at || null,
     tags: []
   };
 }
@@ -95,19 +99,39 @@ async function setNoteTags(userId, noteId, tagNames) {
   }
 }
 
-exports.getAllNotes = async (userId) => {
+exports.getAllNotes = async (userId, options = {}) => {
   await detectSchema();
+  const includeDeleted = Boolean(options.includeDeleted);
+  const onlyDeleted = Boolean(options.onlyDeleted);
+  const ttlClause = supportsSoftDelete
+    ? "AND (n.deleted_at IS NULL OR n.deleted_at > NOW() - INTERVAL '30 days')"
+    : "";
+
   let rows;
   if (schemaMode === 'multi') {
+    const clauses = ["n.user_id=$1"];
+    if (supportsSoftDelete) {
+      if (onlyDeleted) {
+        clauses.push("n.deleted_at IS NOT NULL");
+        clauses.push("n.deleted_at > NOW() - INTERVAL '30 days'");
+      } else if (!includeDeleted) {
+        clauses.push("(n.deleted_at IS NULL)");
+      } else {
+        clauses.push("(n.deleted_at IS NULL OR n.deleted_at > NOW() - INTERVAL '30 days')");
+      }
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const res = await pool.query(
-      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 ORDER BY n.created_at DESC',
+      `SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at, n.deleted_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id ${where} ORDER BY n.created_at DESC`,
       [userId]
     );
     rows = res.rows;
     const tagMap = await fetchTagsForNotes(rows.map(r => r.note_id));
     rows = rows.map(r => ({ ...r, tags: tagMap[r.note_id] || [] }));
   } else {
-    const res = await pool.query('SELECT id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at FROM notes ORDER BY created_at DESC');
+    const res = await pool.query(
+      `SELECT id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at, deleted_at FROM notes ORDER BY created_at DESC`
+    );
     rows = res.rows;
   }
   return rows.map(mapRow);
@@ -117,7 +141,7 @@ exports.getNoteById = async (userId, id) => {
   await detectSchema();
   if (schemaMode === 'multi') {
     const res = await pool.query(
-      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 AND n.note_id=$2',
+      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at, n.deleted_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 AND n.note_id=$2',
       [userId, id]
     );
     const row = res.rows[0];
@@ -192,9 +216,52 @@ exports.deleteNote = async (userId, id) => {
   await detectSchema();
   let res;
   if (schemaMode === 'multi') {
+    if (supportsSoftDelete) {
+      res = await pool.query(
+        'UPDATE notes SET deleted_at=NOW() WHERE user_id=$1 AND note_id=$2 AND deleted_at IS NULL RETURNING note_id AS id, deleted_at',
+        [userId, id]
+      );
+    } else {
+      res = await pool.query('DELETE FROM notes WHERE user_id=$1 AND note_id=$2 RETURNING note_id AS id', [userId, id]);
+    }
+  } else {
+    if (supportsSoftDelete) {
+      res = await pool.query(
+        'UPDATE notes SET deleted_at=NOW() WHERE id=$1 AND deleted_at IS NULL RETURNING id, deleted_at',
+        [id]
+      );
+    } else {
+      res = await pool.query('DELETE FROM notes WHERE id=$1 RETURNING id', [id]);
+    }
+  }
+  return res.rows[0] || null;
+};
+
+exports.hardDeleteNote = async (userId, id) => {
+  await detectSchema();
+  let res;
+  if (schemaMode === 'multi') {
     res = await pool.query('DELETE FROM notes WHERE user_id=$1 AND note_id=$2 RETURNING note_id AS id', [userId, id]);
   } else {
     res = await pool.query('DELETE FROM notes WHERE id=$1 RETURNING id', [id]);
+  }
+  return res.rows[0] || null;
+};
+
+exports.restoreNote = async (userId, id) => {
+  await detectSchema();
+  if (!supportsSoftDelete) return null;
+  let res;
+  if (schemaMode === 'multi') {
+    res = await pool.query(
+      'UPDATE notes SET deleted_at=NULL WHERE user_id=$1 AND note_id=$2 RETURNING note_id AS id',
+      [userId, id]
+    );
+  } else {
+    res = await pool.query(
+      'UPDATE notes SET deleted_at=NULL WHERE id=$1 RETURNING id',
+      [id]
+    );
   }
   return res.rows[0] || null;
 };

@@ -12,6 +12,7 @@ import ConfirmModal from "./ConfirmModal";
 import CreateNotebookModal from "./CreateNoteBookModal";
 import { useTheme } from "./ThemeProvider";
 import WalletConnector from "./WalletConnector";
+import { useWallet } from "../contexts/WalletContext";
 
 interface Notebook {
   id: number;
@@ -24,6 +25,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen = true }: SidebarProps) {
   const { theme } = useTheme();
+  const { selectedNetwork, setSelectedNetwork } = useWallet();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
@@ -324,6 +326,32 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
       {/* Settings */}
       <div className={`mt-auto p-4 border-t ${borderColor} space-y-3`}>
         <WalletConnector />
+        <div className="rounded-2xl border border-dashed border-default/70 bg-[var(--github-bg-secondary)]/60 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-secondary">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-bold">
+              🌐
+            </span>
+            <div>
+              <p className="text-[12px] text-primary font-semibold">Cardano network</p>
+              <p className="text-[11px] text-secondary/80">Choose target chain for wallet + metadata</p>
+            </div>
+          </div>
+          <select
+            value={selectedNetwork}
+            onChange={(e) => {
+              setSelectedNetwork(e.target.value);
+              // Refresh to ensure all network-aware data (wallet, tx history) is reloaded
+              if (typeof window !== "undefined") {
+                setTimeout(() => window.location.reload(), 80);
+              }
+            }}
+            className="w-full mt-1 text-sm rounded-lg border border-default bg-surface px-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-[var(--github-accent)]/40"
+          >
+            <option value="mainnet">Mainnet</option>
+            <option value="preprod">Preprod</option>
+            <option value="preview">Preview</option>
+          </select>
+        </div>
         <button
           onClick={openSettings}
           className={`flex items-center gap-4 w-full px-6 py-2 rounded-r-full text-[14px] ${textPrimary} ${bgHover} transition-colors`}
