@@ -11,10 +11,21 @@ function requireUser(req, res) {
 exports.getAllNotes = async (req, res) => {
   try {
   const userId = requireUser(req, res); if (!userId) return;
-    const notes = await noteModel.getAllNotes(userId);
+    const notes = await noteModel.getAllNotes(userId, { includeDeleted: false });
     res.json(notes);
   } catch (err) {
     console.error('GET /api/notes failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getTrash = async (req, res) => {
+  try {
+    const userId = requireUser(req, res); if (!userId) return;
+    const notes = await noteModel.getAllNotes(userId, { onlyDeleted: true });
+    res.json(notes);
+  } catch (err) {
+    console.error('GET /api/notes/trash failed:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -94,9 +105,36 @@ exports.deleteNote = async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const deleted = await noteModel.deleteNote(userId, id);
     if (!deleted) return res.status(404).json({ error: 'note not found' });
-    res.json({ success: true, id: deleted.id });
+    res.json({ success: true, id: deleted.id, deleted_at: deleted.deleted_at || new Date().toISOString() });
   } catch (err) {
     console.error('DELETE /api/notes/:id failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.restoreNote = async (req, res) => {
+  try {
+    const userId = requireUser(req, res); if (!userId) return;
+    const id = parseInt(req.params.id, 10);
+    const restored = await noteModel.restoreNote(userId, id);
+    if (!restored) return res.status(404).json({ error: 'note not found or soft delete not supported' });
+    const note = await noteModel.getNoteById(userId, id);
+    res.json(note);
+  } catch (err) {
+    console.error('POST /api/notes/:id/restore failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.permanentDeleteNote = async (req, res) => {
+  try {
+    const userId = requireUser(req, res); if (!userId) return;
+    const id = parseInt(req.params.id, 10);
+    const deleted = await noteModel.hardDeleteNote(userId, id);
+    if (!deleted) return res.status(404).json({ error: 'note not found' });
+    res.json({ success: true, id: deleted.id });
+  } catch (err) {
+    console.error('POST /api/notes/:id/permanent failed:', err);
     res.status(500).json({ error: err.message });
   }
 };
