@@ -726,6 +726,38 @@ export default function Page() {
         </div>
       </div>
 
+      {/* Quick view toggles ensure Trash/All are always reachable, even when wallet panels expand */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => {
+            setShowTrash(false);
+            setActiveNotebook(null);
+            fetchNotes();
+          }}
+          className={`px-4 py-2 rounded-full text-sm font-semibold border transition-smooth ${
+            showTrash
+              ? "text-secondary bg-surface border-default hover:text-primary"
+              : "bg-[var(--github-accent)] text-white border-transparent shadow shadow-[var(--github-accent)]/30"
+          }`}
+        >
+          All notes
+        </button>
+        <button
+          onClick={() => {
+            setShowTrash(true);
+            setActiveNotebook(null);
+            fetchTrash();
+          }}
+          className={`px-4 py-2 rounded-full text-sm font-semibold border transition-smooth ${
+            showTrash
+              ? "bg-[var(--github-danger)] text-white border-transparent shadow shadow-[var(--github-danger)]/30"
+              : "text-secondary bg-surface border-default hover:text-primary"
+          }`}
+        >
+          Trash
+        </button>
+      </div>
+
       {walletEnabled && connectedWallet && walletAddress && (
         <div className="mb-6 card rounded-2xl border border-dashed border-default bg-[var(--github-bg-secondary)]/40 p-4 flex flex-col gap-2">
           <p className="text-sm font-semibold text-primary flex items-center gap-2">
@@ -750,17 +782,11 @@ export default function Page() {
             <span className="px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-semibold">
               Manual wallet mode active
             </span>
-            <span
-              className={`px-3 py-1 rounded-full font-semibold ${
-                browserMnemonic
-                  ? "bg-emerald-500/15 text-emerald-300"
-                  : "bg-[var(--github-danger)]/15 text-[var(--github-danger)]"
-              }`}
-            >
-              {browserMnemonic
-                ? "Mnemonic detected in this browser"
-                : "Mnemonic missing – re-register here"}
-            </span>
+            {browserMnemonic && (
+              <span className="px-3 py-1 rounded-full font-semibold bg-emerald-500/15 text-emerald-300">
+                Mnemonic detected in this browser
+              </span>
+            )}
             <span className="px-3 py-1 rounded-full bg-surface border border-dashed border-default text-secondary font-semibold">
               {manualAddress
                 ? `Linked address: ${manualAddress.slice(

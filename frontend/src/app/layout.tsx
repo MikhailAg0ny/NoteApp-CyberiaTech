@@ -20,6 +20,11 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata = {
   title: "CyberiaTech",
   description: "Modern notes app",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/cyberia.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

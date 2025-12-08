@@ -15,7 +15,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('light');
   const [splashDone, setSplashDone] = useState(true);
   const [splashPhase, setSplashPhase] = useState<'in' | 'out'>('out');
 
@@ -61,7 +61,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       {!splashDone && (
         <div className={`splash-overlay fixed inset-0 flex items-center justify-center z-50 ${splashPhase === 'out' ? 'exit' : ''}`}>
           <div className="splash-content flex flex-col items-center">
-            <img src="/logo.svg" alt="Logo" className="splash-logo w-40 h-40 drop-shadow-2xl" />
+            <img
+              src="/cyberia.png"
+              alt="Cyberia Tech Logo"
+              className="splash-logo w-128 h-128 drop-shadow-2xl"
+            />
             <div className="mt-10 h-1.5 w-56 rounded-full overflow-hidden splash-progress">
               <div className="h-full bar" />
             </div>
