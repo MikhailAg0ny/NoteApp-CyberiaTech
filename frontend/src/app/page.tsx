@@ -3,16 +3,16 @@
 import {
   DocumentTextIcon,
   PlusIcon,
-  TrashIcon,
-  UserCircleIcon,
+  TrashIcon
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
-import CreateNoteModal from "./components/CreateNoteModal";
 import ConfirmModal from "./components/ConfirmModal";
+import CreateNotebookModal from "./components/CreateNoteBookModal";
+import CreateNoteModal from "./components/CreateNoteModal";
 import ErrorDialog from "./components/ErrorDialog";
-import SettingsModal from "./components/SettingsModal";
-import NoteModal from "./components/NoteModal";
 import ManualWalletPanel from "./components/ManualWalletPanel";
+import NoteModal from "./components/NoteModal";
+import SettingsModal from "./components/SettingsModal";
 import { useWallet } from "./contexts/WalletContext";
 
 type Note = {
@@ -106,6 +106,7 @@ export default function Page() {
   const [previewing, setPreviewing] = useState<Note | null>(null);
   const [activeFilter, setActiveFilter] = useState("Today");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -134,6 +135,7 @@ export default function Page() {
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
   const BLOCKFROST_PROJECT_ID = process.env.NEXT_PUBLIC_BLOCKFROST_PROJECT_ID;
   const [isFabDropdownOpen, setIsFabDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const fabRef = useRef<HTMLDivElement>(null);
 
   const token =
@@ -509,9 +511,10 @@ export default function Page() {
     const handleOpenCreateModal = () => {
       setIsCreateModalOpen(true);
     };
-
+    const handleOpenCreateNotebook = () => setIsNotebookModalOpen(true);
     const handleOpenSettings = () => setIsSettingsOpen(true);
     document.addEventListener("openCreateNoteModal", handleOpenCreateModal);
+    document.addEventListener("openCreateNotebookModal", handleOpenCreateNotebook);
     document.addEventListener("openSettingsModal", handleOpenSettings);
     const handleFilterNotebook = (event: Event) => {
       const customEvent = event as CustomEvent<NotebookFilterDetail>;
@@ -528,13 +531,20 @@ export default function Page() {
     document.addEventListener("filterNotebook", handleFilterNotebook);
 
     return () => {
-      document.removeEventListener(
-        "openCreateNoteModal",
-        handleOpenCreateModal
-      );
+      document.removeEventListener("openCreateNoteModal", handleOpenCreateModal);
+      document.removeEventListener("openCreateNotebookModal", handleOpenCreateNotebook);
       document.removeEventListener("openSettingsModal", handleOpenSettings);
       document.removeEventListener("filterNotebook", handleFilterNotebook);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleSearch = (event: Event) => {
+      const customEvent = event as CustomEvent<{ query: string }>;
+      setSearchQuery(customEvent.detail?.query ?? '');
+    };
+    document.addEventListener("searchNotes", handleSearch);
+    return () => document.removeEventListener("searchNotes", handleSearch);
   }, []);
 
   const now = new Date();
@@ -566,9 +576,28 @@ export default function Page() {
   const matchesNotebookFilter = (note: Note) =>
     !activeNotebook || note.notebook_id === activeNotebook;
 
-  const filteredNotes = showTrash
-    ? trashNotes
-    : notes.filter((note) => matchesNotebookFilter(note) && matchesTimeFilter(note));
+  const matchesSearch = (note: Note) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const haystacks = [
+      note.title,
+      note.content,
+      note.notebook_name,
+      note.tags?.map((t) => t.name).join(" "),
+    ]
+      .filter(Boolean)
+      .map((s) => s!.toLowerCase());
+    return haystacks.some((h) => h.includes(q));
+  };
+
+  const filteredNotes = (
+    showTrash
+      ? trashNotes
+      : notes
+  )
+    .filter(matchesNotebookFilter)
+    .filter(matchesTimeFilter)
+    .filter(matchesSearch);
 
   const restoreNote = async (id: number) => {
     try {
@@ -639,6 +668,29 @@ export default function Page() {
     };
   };
 
+  const createNotebook = async (name: string) => {
+    if (!token) return redirectToLogin();
+    try {
+      const res = await fetch(`${API_BASE}/api/notebooks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name }),
+      });
+      if (res.status === 401) return redirectToLogin();
+      if (!res.ok) throw new Error("Failed to create notebook");
+      const created = await res.json();
+      setNotebooks((prev) => [...prev, created]);
+      document.dispatchEvent(new CustomEvent("notebookCreated", { detail: created }));
+    } catch (err) {
+      showErrorDialog(err, "Failed to create notebook");
+    } finally {
+      setIsNotebookModalOpen(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-app p-4 md:p-8 transition-colors">
       {/* Create Note Modal */}
@@ -647,6 +699,11 @@ export default function Page() {
         onClose={() => setIsCreateModalOpen(false)}
         onSave={addNote}
         notebooks={notebooks}
+      />
+      <CreateNotebookModal
+        isOpen={isNotebookModalOpen}
+        onClose={() => setIsNotebookModalOpen(false)}
+        onSave={createNotebook}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
@@ -661,10 +718,15 @@ export default function Page() {
 
       {/* Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-3xl font-bold text-primary tracking-tight bg-gradient-to-r from-[var(--github-text-primary)] to-[var(--github-text-secondary)] bg-clip-text">
             My Notes
           </h1>
+          {searchQuery.trim() && (
+            <span className="text-xs px-3 py-1 rounded-full bg-surface border border-default text-secondary">
+              Searching: “{searchQuery.trim()}”
+            </span>
+          )}
           {loading && (
             <div className="flex items-center gap-2 text-xs text-secondary">
               <div className="w-3 h-3 border-2 border-[var(--github-accent)] border-t-transparent rounded-full animate-spin"></div>
@@ -677,52 +739,6 @@ export default function Page() {
               <span>{error}</span>
             </div>
           )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {userProfile && (
-            <div className="hidden md:flex items-center gap-3 bg-surface border border-default rounded-full px-3 py-1.5 shadow-sm">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--github-accent)] to-[var(--github-accent-hover)] flex items-center justify-center text-white shadow-lg">
-                <UserCircleIcon className="w-5 h-5" />
-              </div>
-              <div className="leading-tight min-w-0">
-                <div className="text-sm font-semibold text-primary truncate">
-                  {userProfile.name || userProfile.email}
-                </div>
-                <div className="text-[11px] text-secondary truncate max-w-[180px]">
-                  {userProfile.email}
-                </div>
-              </div>
-            </div>
-          )}
-          {/* Filters + Logout */}
-          <div className="flex items-center bg-surface border border-default rounded-full p-1 shadow-sm transition-smooth">
-            {filters.map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={`px-4 md:px-5 py-1.5 rounded-full text-sm font-medium transition-smooth ${
-                  activeFilter === filter
-                    ? "bg-[var(--github-accent)] text-white shadow-lg shadow-[var(--github-accent)]/25"
-                    : "text-secondary hover:text-primary hover:bg-[var(--github-border)]/30"
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                localStorage.removeItem("token");
-                localStorage.removeItem("user_id");
-                localStorage.removeItem("user_name");
-                localStorage.removeItem("user_email");
-                window.location.href = "/login";
-              }}
-              className="ml-2 px-3 md:px-4 py-1.5 rounded-full text-sm font-medium text-secondary hover:text-[var(--github-danger)] hover:bg-[var(--github-danger)]/10 transition-smooth"
-            >
-              Logout
-            </button>
-          </div>
         </div>
       </div>
 
