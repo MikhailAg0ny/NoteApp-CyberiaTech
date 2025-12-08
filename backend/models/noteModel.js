@@ -22,6 +22,12 @@ function mapRow(row) {
       notebook_name: row.notebook_name || null,
       title: row.title,
       content: row.content,
+      tx_hash: row.tx_hash || null,
+      tx_status: row.tx_status || null,
+      cardano_address: row.cardano_address || null,
+      chain_action: row.chain_action || null,
+      chain_label: row.chain_label || null,
+      chain_metadata: row.chain_metadata || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       tags: row.tags || []
@@ -34,6 +40,12 @@ function mapRow(row) {
     notebook_name: null,
     title: row.title,
     content: row.content,
+    tx_hash: row.tx_hash || null,
+    tx_status: row.tx_status || null,
+    cardano_address: row.cardano_address || null,
+    chain_action: row.chain_action || null,
+    chain_label: row.chain_label || null,
+    chain_metadata: row.chain_metadata || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     tags: []
@@ -88,14 +100,14 @@ exports.getAllNotes = async (userId) => {
   let rows;
   if (schemaMode === 'multi') {
     const res = await pool.query(
-      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 ORDER BY n.created_at DESC',
+      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 ORDER BY n.created_at DESC',
       [userId]
     );
     rows = res.rows;
     const tagMap = await fetchTagsForNotes(rows.map(r => r.note_id));
     rows = rows.map(r => ({ ...r, tags: tagMap[r.note_id] || [] }));
   } else {
-    const res = await pool.query('SELECT id, title, content, created_at, updated_at FROM notes ORDER BY created_at DESC');
+    const res = await pool.query('SELECT id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at FROM notes ORDER BY created_at DESC');
     rows = res.rows;
   }
   return rows.map(mapRow);
@@ -105,7 +117,7 @@ exports.getNoteById = async (userId, id) => {
   await detectSchema();
   if (schemaMode === 'multi') {
     const res = await pool.query(
-      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 AND n.note_id=$2',
+      'SELECT n.note_id, n.user_id, n.notebook_id, nb.name AS notebook_name, n.title, n.content, n.tx_hash, n.tx_status, n.cardano_address, n.chain_action, n.chain_label, n.chain_metadata, n.created_at, n.updated_at FROM notes n LEFT JOIN notebooks nb ON n.notebook_id=nb.notebook_id WHERE n.user_id=$1 AND n.note_id=$2',
       [userId, id]
     );
     const row = res.rows[0];
@@ -117,17 +129,25 @@ exports.getNoteById = async (userId, id) => {
     row.tags = tagRes.rows.map(r => ({ id: r.tag_id, name: r.name }));
     return mapRow(row);
   } else {
-    const res = await pool.query('SELECT id, title, content, created_at, updated_at FROM notes WHERE id=$1', [id]);
+    const res = await pool.query('SELECT id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at FROM notes WHERE id=$1', [id]);
     return mapRow(res.rows[0]);
   }
 };
 
-exports.createNote = async (userId, notebookId, title, content, tagNames) => {
+exports.createNote = async (userId, notebookId, title, content, tagNames, txMeta = {}) => {
   await detectSchema();
+  const {
+    tx_hash = null,
+    tx_status = 'pending',
+    cardano_address = null,
+    chain_action = null,
+    chain_label = null,
+    chain_metadata = null,
+  } = txMeta;
   if (schemaMode === 'multi') {
     const res = await pool.query(
-      'INSERT INTO notes (user_id, notebook_id, title, content) VALUES ($1,$2,$3,$4) RETURNING note_id',
-      [userId, notebookId || null, title, content]
+      'INSERT INTO notes (user_id, notebook_id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING note_id',
+      [userId, notebookId || null, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata]
     );
     const noteId = res.rows[0].note_id;
     if (Array.isArray(tagNames) && tagNames.length) {
@@ -135,17 +155,25 @@ exports.createNote = async (userId, notebookId, title, content, tagNames) => {
     }
     return await exports.getNoteById(userId, noteId);
   } else {
-    const res = await pool.query('INSERT INTO notes (title, content) VALUES ($1,$2) RETURNING id, title, content, created_at, updated_at', [title, content]);
+    const res = await pool.query('INSERT INTO notes (title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at', [title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata]);
     return mapRow(res.rows[0]);
   }
 };
 
-exports.updateNote = async (userId, id, title, content, notebookId, tagNames) => {
+exports.updateNote = async (userId, id, title, content, notebookId, tagNames, txMeta = {}) => {
   await detectSchema();
+  const {
+    tx_hash = null,
+    tx_status = null,
+    cardano_address = null,
+    chain_action = null,
+    chain_label = null,
+    chain_metadata = null,
+  } = txMeta;
   if (schemaMode === 'multi') {
     const res = await pool.query(
-      'UPDATE notes SET title=$1, content=$2, notebook_id=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$4 AND note_id=$5 RETURNING note_id',
-      [title, content, notebookId || null, userId, id]
+      'UPDATE notes SET title=$1, content=$2, notebook_id=$3, tx_hash=COALESCE($4, tx_hash), tx_status=COALESCE($5, tx_status), cardano_address=COALESCE($6, cardano_address), chain_action=COALESCE($7, chain_action), chain_label=COALESCE($8, chain_label), chain_metadata=COALESCE($9, chain_metadata), updated_at=CURRENT_TIMESTAMP WHERE user_id=$10 AND note_id=$11 RETURNING note_id',
+      [title, content, notebookId || null, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, userId, id]
     );
     if (!res.rows[0]) return null;
     if (Array.isArray(tagNames)) {
@@ -153,7 +181,7 @@ exports.updateNote = async (userId, id, title, content, notebookId, tagNames) =>
     }
     return await exports.getNoteById(userId, id);
   } else {
-    const res = await pool.query('UPDATE notes SET title=$1, content=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3 RETURNING id, title, content, created_at, updated_at', [title, content, id]);
+    const res = await pool.query('UPDATE notes SET title=$1, content=$2, tx_hash=COALESCE($3, tx_hash), tx_status=COALESCE($4, tx_status), cardano_address=COALESCE($5, cardano_address), chain_action=COALESCE($6, chain_action), chain_label=COALESCE($7, chain_label), chain_metadata=COALESCE($8, chain_metadata), updated_at=CURRENT_TIMESTAMP WHERE id=$9 RETURNING id, title, content, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata, created_at, updated_at', [title, content, txMeta.tx_hash || null, txMeta.tx_status || null, txMeta.cardano_address || null, txMeta.chain_action || null, txMeta.chain_label || null, txMeta.chain_metadata || null, id]);
     return mapRow(res.rows[0]);
   }
 };

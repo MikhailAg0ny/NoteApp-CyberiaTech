@@ -13,6 +13,9 @@ export interface NoteRecord {
   created_at?: string;
   updatedAt?: string | null;
   updated_at?: string;
+   tx_hash?: string | null;
+   tx_status?: string | null;
+   cardano_address?: string | null;
 }
 
 interface NoteModalProps {
@@ -56,6 +59,28 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
       day: 'numeric',
       year: 'numeric',
     });
+  })();
+
+  const statusBadge = (() => {
+    const status = note.tx_status;
+    if (!status) return null;
+    const normalized = status.toLowerCase();
+    if (normalized === 'confirmed') {
+      return {
+        label: 'Confirmed',
+        className: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40',
+      };
+    }
+    if (normalized === 'pending') {
+      return {
+        label: 'Pending',
+        className: 'bg-amber-500/15 text-amber-300 border border-amber-500/40',
+      };
+    }
+    return {
+      label: status,
+      className: 'bg-surface border border-default text-secondary',
+    };
   })();
 
   const close = () => {
@@ -115,6 +140,20 @@ export default function NoteModal({ open, note, notebooks, onClose, onSave, onDe
               <h2 className="text-xl font-bold text-primary truncate">{note.title || 'Untitled Note'}</h2>
               {createdDisplay && (
                 <p className="text-xs text-secondary mt-1">Created {createdDisplay}</p>
+              )}
+              {(statusBadge || note.tx_hash) && (
+                <div className="flex items-center gap-2 mt-1">
+                  {statusBadge && (
+                    <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${statusBadge.className}`}>
+                      {statusBadge.label}
+                    </span>
+                  )}
+                  {note.tx_hash && (
+                    <span className="text-[10px] font-mono text-secondary truncate max-w-xs" title={note.tx_hash || undefined}>
+                      Tx: {note.tx_hash.slice(0, 10)}…
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             {dirty && (

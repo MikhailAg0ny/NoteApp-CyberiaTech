@@ -90,6 +90,7 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
     fetchNotebooks();
   }, [token, API_BASE]);
 
+
   useEffect(() => {
     const handleNotebookCreated = (e: any) => {
       const newNotebook = e.detail;
@@ -186,7 +187,7 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
     <aside 
       className={`flex flex-col w-64 ${bgSidebar} border-r ${borderColor} select-none transition-all duration-300 ease-in-out ${
         isOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
-      }`}
+      } overflow-y-auto`}
       style={{ height: '100%' }}
     >
       {/* Compose Button */}
