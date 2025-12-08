@@ -1,18 +1,15 @@
 "use client";
 
 import {
-  Cog6ToothIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
-  PencilIcon,
-  TrashIcon,
+  TrashIcon
 } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useWallet } from "../contexts/WalletContext";
 import ConfirmModal from "./ConfirmModal";
-import CreateNotebookModal from "./CreateNoteBookModal";
 import { useTheme } from "./ThemeProvider";
 import WalletConnector from "./WalletConnector";
-import { useWallet } from "../contexts/WalletContext";
 
 interface Notebook {
   id: number;
@@ -28,13 +25,10 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
   const { selectedNetwork, setSelectedNetwork } = useWallet();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<number | null>(null);
-  const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
-  const [showNotebookModal, setShowNotebookModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [tempName, setTempName] = useState("");
   const [notebookDropdownOpen, setNotebookDropdownOpen] = useState<number | null>(null);
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
     open: boolean;
     id: number | null;
@@ -59,22 +53,6 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
   const composeBtn = isDark ? 'bg-white text-black hover:bg-gray-100' : 'bg-white text-[#3c4043] hover:bg-gray-100';
   const inputBg = isDark ? 'bg-gray-800 text-white border-gray-600' : 'bg-white text-black border-gray-300';
   const focusRing = isDark ? 'focus:ring-gray-500' : 'focus:ring-[#d93025]';
-
-  useEffect(() => {
-    const handler = () => setShowNotebookModal(true);
-    document.addEventListener("openCreateNotebookModal", handler);
-    return () => document.removeEventListener("openCreateNotebookModal", handler);
-  }, []);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setCreateDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   useEffect(() => {
     const fetchNotebooks = async () => {
@@ -102,10 +80,6 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
     document.addEventListener("notebookCreated", handleNotebookCreated);
     return () => document.removeEventListener("notebookCreated", handleNotebookCreated);
   }, []);
-
-  const openSettings = () => {
-    document.dispatchEvent(new CustomEvent("openSettingsModal"));
-  };
 
   const selectNotebook = (id: number | null) => {
     setActiveNotebook(id);
@@ -187,49 +161,10 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
 
   return (
     <aside 
-      className={`flex flex-col w-64 ${bgSidebar} border-r ${borderColor} select-none transition-all duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
-      } overflow-y-auto`}
+      className={`flex flex-col ${isOpen ? 'w-64 translate-x-0 opacity-100 border-r' : 'w-0 -translate-x-full opacity-0 border-transparent'} ${bgSidebar} ${borderColor} select-none transition-all duration-300 ease-in-out overflow-y-auto`}
       style={{ height: '100%' }}
+      aria-hidden={!isOpen}
     >
-      {/* Compose Button */}
-      <div className="p-4">
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setCreateDropdownOpen(!createDropdownOpen)}
-            className={`flex items-center gap-4 px-6 py-3 ${composeBtn} shadow-md rounded-full font-medium text-[14px] transition-all w-full justify-center`}
-          >
-            <PencilIcon className="w-5 h-5" />
-            <span>Compose</span>
-          </button>
-
-          {createDropdownOpen && (
-            <div className={`absolute left-0 mt-2 w-full ${bgDropdown} border ${borderDropdown} rounded-lg shadow-xl z-50`}>
-              <button
-                className={`w-full text-left px-4 py-3 text-[14px] ${textPrimary} ${bgHover} transition`}
-                onClick={() => {
-                  setCreateDropdownOpen(false);
-                  handleCreateNoteClick();
-                }}
-              >
-                Create Note
-              </button>
-              <button
-                className={`w-full text-left px-4 py-3 text-[14px] ${textPrimary} ${bgHover} transition`}
-                onClick={() => {
-                  if (!token) return;
-                  setCreateDropdownOpen(false);
-                  setShowNotebookModal(true);
-                }}
-                disabled={!token}
-              >
-                Create Notebook
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Navigation */}
       <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
         {navItems.map(({ icon: Icon, label, action, count }) => (
@@ -340,7 +275,6 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
             value={selectedNetwork}
             onChange={(e) => {
               setSelectedNetwork(e.target.value);
-              // Refresh to ensure all network-aware data (wallet, tx history) is reloaded
               if (typeof window !== "undefined") {
                 setTimeout(() => window.location.reload(), 80);
               }
@@ -352,36 +286,7 @@ export default function Sidebar({ isOpen = true }: SidebarProps) {
             <option value="preview">Preview</option>
           </select>
         </div>
-        <button
-          onClick={openSettings}
-          className={`flex items-center gap-4 w-full px-6 py-2 rounded-r-full text-[14px] ${textPrimary} ${bgHover} transition-colors`}
-        >
-          <Cog6ToothIcon className="w-5 h-5" />
-          <span className="font-medium">Settings</span>
-        </button>
       </div>
-
-      <CreateNotebookModal
-        isOpen={showNotebookModal}
-        onClose={() => setShowNotebookModal(false)}
-        onSave={(name) => {
-          fetch(`${API_BASE}/api/notebooks`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ name }),
-          })
-            .then((res) => res.json())
-            .then((data) => {
-              setNotebooks((prev) => [...prev, data]);
-              document.dispatchEvent(
-                new CustomEvent("notebooksUpdated", { detail: data })
-              );
-            });
-        }}
-      />
 
       <ConfirmModal
         isOpen={confirmDelete.open}
