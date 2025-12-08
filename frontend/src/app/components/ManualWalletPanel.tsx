@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ArrowPathIcon,
   ClockIcon,
@@ -31,12 +31,24 @@ export default function ManualWalletPanel() {
     transactionsLoading,
     transactionsError,
     loadTransactions,
+    selectedNetwork,
+    setSelectedNetwork,
   } = useWallet();
 
   const activeAddress = address || linkedWallet?.wallet_address || null;
-  const network = (linkedWallet?.wallet_network || config?.network || "preview").toLowerCase();
-  const explorerBase = TX_EXPLORER_URL[network] || TX_EXPLORER_URL.preview;
-  const explorerAddressBase = ADDRESS_EXPLORER_URL[network] || ADDRESS_EXPLORER_URL.preview;
+  useEffect(() => {
+    const saved =
+      typeof window !== "undefined"
+        ? localStorage.getItem("wallet_network_preference")
+        : null;
+    if (saved) setSelectedNetwork(saved);
+  }, [setSelectedNetwork]);
+  useEffect(() => {
+    const next = (linkedWallet?.wallet_network || config?.network || "preview").toLowerCase();
+    setSelectedNetwork(next);
+  }, [linkedWallet?.wallet_network, config?.network, setSelectedNetwork]);
+  const explorerBase = TX_EXPLORER_URL[selectedNetwork] || TX_EXPLORER_URL.preview;
+  const explorerAddressBase = ADDRESS_EXPLORER_URL[selectedNetwork] || ADDRESS_EXPLORER_URL.preview;
   const subtitle = connectedWallet
     ? "History synced from your Lace sidebar session."
     : "Use the Lace link in the sidebar to connect and populate history.";
@@ -69,7 +81,21 @@ export default function ManualWalletPanel() {
             <p className="text-primary font-semibold">
               {activeAddress ? truncate(activeAddress) : "No wallet linked"}
             </p>
-            <p className="text-secondary/80 text-[11px]">Network: {network}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-[11px] text-secondary/80" htmlFor="network-select">
+                Network:
+              </label>
+              <select
+                id="network-select"
+                value={selectedNetwork}
+                onChange={(e) => setSelectedNetwork(e.target.value)}
+                className="text-[11px] bg-surface border border-default rounded px-2 py-1 text-primary"
+              >
+                <option value="mainnet">Mainnet</option>
+                <option value="preprod">Preprod</option>
+                <option value="preview">Preview</option>
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button

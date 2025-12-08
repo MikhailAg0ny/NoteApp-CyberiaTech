@@ -5,7 +5,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import CreateNoteModal from "./components/CreateNoteModal";
 import SettingsModal from "./components/SettingsModal";
 import NoteModal from "./components/NoteModal";
@@ -23,6 +23,12 @@ type Note = {
   date?: string;
   time?: string;
   createdAt?: string | null;
+  tx_hash?: string | null;
+  tx_status?: string | null;
+  cardano_address?: string | null;
+  chain_action?: string | null;
+  chain_label?: number | null;
+  chain_metadata?: unknown;
 };
 
 type ApiNoteResponse = {
@@ -33,6 +39,12 @@ type ApiNoteResponse = {
   notebook_name?: string | null;
   tags?: { id?: number; name: string }[];
   created_at?: string | null;
+  tx_hash?: string | null;
+  tx_status?: string | null;
+  cardano_address?: string | null;
+  chain_action?: string | null;
+  chain_label?: number | null;
+  chain_metadata?: unknown;
 };
 
 type NotebookFilterDetail = {
@@ -57,6 +69,12 @@ const mapApiNote = (apiNote: ApiNoteResponse): Note => {
         })
       : undefined,
     createdAt,
+    tx_hash: apiNote.tx_hash ?? null,
+    tx_status: apiNote.tx_status ?? null,
+    cardano_address: apiNote.cardano_address ?? null,
+    chain_action: apiNote.chain_action ?? null,
+    chain_label: apiNote.chain_label ?? null,
+    chain_metadata: apiNote.chain_metadata ?? null,
   };
 };
 
@@ -93,9 +111,14 @@ export default function Page() {
     browserMnemonic,
     browserAddress,
     linkedWallet,
+    submitNoteTransaction,
+    getWalletApi,
+    config: walletConfig,
+    selectedNetwork,
   } = wallet;
   const manualAddress = linkedWallet?.wallet_address || browserAddress || null;
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+  const BLOCKFROST_PROJECT_ID = process.env.NEXT_PUBLIC_BLOCKFROST_PROJECT_ID;
   const [isFabDropdownOpen, setIsFabDropdownOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +187,100 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const maybeSubmitNoteTx = async (action: string, noteContent: string) => {
+    if (!walletEnabled) return null;
+    const api = getWalletApi?.();
+    if (!api || !connectedWallet) return null;
+    try {
+      const result = await submitNoteTransaction({
+        action,
+        noteContent,
+        targetAddress: walletAddress || undefined,
+      });
+      return {
+        tx_hash: result.txHash,
+        tx_status: "pending",
+        cardano_address: result.cardanoAddress,
+        chain_action: action,
+        chain_label: result.label,
+        chain_metadata: result.metadata,
+      } as const;
+    } catch (err) {
+      setError(getErrorMessage(err));
+      return null;
+    }
+  };
+
+  const markNoteConfirmed = async (note: Note) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/notes/${note.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: note.title,
+          content: note.content,
+          notebook_id: note.notebook_id ?? null,
+          tags: (note.tags || []).map((t) => t.name),
+          tx_status: "confirmed",
+        }),
+      });
+      if (!res.ok) return;
+      const updated = (await res.json()) as ApiNoteResponse;
+      const normalized = mapApiNote(updated);
+      setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, ...normalized } : n)));
+      setSelected((prev) =>
+        prev && prev.id === note.id ? { ...prev, ...normalized } : prev
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+
+  const refreshPendingStatuses = useCallback(async () => {
+    if (!BLOCKFROST_PROJECT_ID) return;
+    const pending = notes.filter(
+      (n) => n.tx_hash && (n.tx_status || "").toLowerCase() === "pending"
+    );
+    if (!pending.length) return;
+    const baseUrl = walletConfig?.blockfrostUrl ||
+      (selectedNetwork === "mainnet"
+        ? "https://cardano-mainnet.blockfrost.io/api/v0"
+        : selectedNetwork === "preprod"
+        ? "https://cardano-preprod.blockfrost.io/api/v0"
+        : "https://cardano-preview.blockfrost.io/api/v0");
+    for (const note of pending) {
+      try {
+        const res = await fetch(`${baseUrl}/txs/${note.tx_hash}`, {
+          headers: {
+            project_id: BLOCKFROST_PROJECT_ID,
+          },
+        });
+        if (res.ok) {
+          await markNoteConfirmed(note);
+        }
+      } catch (err) {
+        console.warn("tx status check failed", err);
+      }
+    }
+  }, [BLOCKFROST_PROJECT_ID, notes, walletConfig?.blockfrostUrl, selectedNetwork]);
+
+  useEffect(() => {
+    if (!BLOCKFROST_PROJECT_ID) return;
+    const hasPending = notes.some(
+      (n) => n.tx_hash && (n.tx_status || "").toLowerCase() === "pending"
+    );
+    if (!hasPending) return;
+    const interval = setInterval(() => {
+      refreshPendingStatuses();
+    }, 25000);
+    refreshPendingStatuses();
+    return () => clearInterval(interval);
+  }, [BLOCKFROST_PROJECT_ID, notes, refreshPendingStatuses]);
+
   // Create note (calls backend)
   const addNote = async (
     newTitle: string,
@@ -174,6 +291,7 @@ export default function Page() {
     if (!newTitle.trim()) return;
     try {
       setError(null);
+      const txMeta = await maybeSubmitNoteTx("create", newContent);
       const res = await fetch(`${API_BASE}/api/notes`, {
         method: "POST",
         headers: {
@@ -185,6 +303,7 @@ export default function Page() {
           content: newContent,
           notebook_id: notebookId,
           tags: tagNames,
+          ...(txMeta ? txMeta : {}),
         }),
       });
       if (res.status === 401) {
@@ -217,6 +336,7 @@ export default function Page() {
   ) => {
     try {
       setError(null);
+      const txMeta = await maybeSubmitNoteTx("update", payload.content);
       const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "PUT",
         headers: {
@@ -228,6 +348,7 @@ export default function Page() {
           content: payload.content,
           notebook_id: payload.notebook_id,
           tags: payload.tags,
+          ...(txMeta ? txMeta : {}),
         }),
       });
       if (res.status === 401) {
@@ -344,6 +465,29 @@ export default function Page() {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const getStatusBadge = (status?: string | null) => {
+    if (!status) return null;
+    const normalized = status.toLowerCase();
+    if (normalized === "confirmed") {
+      return {
+        label: "Confirmed",
+        className:
+          "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40",
+      };
+    }
+    if (normalized === "pending") {
+      return {
+        label: "Pending",
+        className:
+          "bg-amber-500/15 text-amber-300 border border-amber-500/40",
+      };
+    }
+    return {
+      label: status,
+      className: "bg-surface border border-default text-secondary",
+    };
   };
 
   return (
@@ -515,6 +659,16 @@ export default function Page() {
                               <h3 className="font-semibold text-lg text-primary truncate transition-colors group-hover:text-[var(--github-accent)]">
                                 {note.title}
                               </h3>
+                              {(() => {
+                                const badge = getStatusBadge(note.tx_status);
+                                return badge ? (
+                                  <span
+                                    className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${badge.className}`}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                ) : null;
+                              })()}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -716,6 +870,21 @@ export default function Page() {
               {previewing.content || "No content"}
             </p>
             <div className="flex flex-wrap gap-2 mb-6">
+              {(() => {
+                const badge = getStatusBadge(previewing.tx_status);
+                return badge ? (
+                  <span
+                    className={`text-[11px] px-3 py-1 rounded-full font-semibold ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                ) : null;
+              })()}
+              {previewing.tx_hash && (
+                <span className="text-[11px] font-mono text-secondary truncate max-w-xs" title={previewing.tx_hash}>
+                  Tx: {previewing.tx_hash.slice(0, 10)}…
+                </span>
+              )}
               {previewing.notebook_name && (
                 <span className="text-[11px] px-3 py-1 rounded-full bg-[var(--github-accent)]/15 text-[var(--github-accent)] font-medium">
                   {previewing.notebook_name}
