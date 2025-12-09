@@ -47,9 +47,9 @@ export default function LoginPage() {
       localStorage.setItem('user_email', data.user.email || '');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('playSplashAfterLogin', 'true');
+        window.dispatchEvent(new Event("auth:login"));
       }
       
-      // Use router for smoother navigation
       router.push('/');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
