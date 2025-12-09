@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowPathIcon,
   ClockIcon,
@@ -30,6 +30,7 @@ export default function ManualWalletPanel() {
     transactions,
     transactionsLoading,
     transactionsError,
+    txKinds,
     loadTransactions,
     selectedNetwork,
     setSelectedNetwork,
@@ -52,7 +53,12 @@ export default function ManualWalletPanel() {
   const subtitle = connectedWallet
     ? "History synced from your Lace sidebar session."
     : "Use the Lace link in the sidebar to connect and populate history.";
-  const recentTransactions = useMemo(() => transactions.slice(0, 10), [transactions]);
+  const pageSize = 10;
+  const [page, setPage] = useState(0);
+  const recentTransactions = useMemo(
+    () => transactions.slice(page * pageSize, page * pageSize + pageSize),
+    [transactions, page]
+  );
 
   const handleRefresh = () => {
     if (activeAddress) {
@@ -166,6 +172,21 @@ export default function ManualWalletPanel() {
                   </p>
                 </div>
                 <div className="text-right text-[11px] text-secondary/80 space-y-1">
+                  <div className="inline-flex items-center gap-2 justify-end">
+                    <span className={`px-2 py-1 rounded-full border text-[10px] font-semibold ${
+                      txKinds[tx.tx_hash] === "payment"
+                        ? "border-[var(--github-accent)]/30 text-[var(--github-accent)] bg-[var(--github-accent)]/10"
+                        : txKinds[tx.tx_hash] === "metadata"
+                        ? "border-amber-400/40 text-amber-300 bg-amber-500/10"
+                        : "border-default text-secondary bg-surface"
+                    }`}>
+                      {txKinds[tx.tx_hash] === "payment"
+                        ? "Send recipient"
+                        : txKinds[tx.tx_hash] === "metadata"
+                        ? "Save metadata"
+                        : "External"}
+                    </span>
+                  </div>
                   <div>
                     <p>Block #{tx.block_height}</p>
                     <p>Index {tx.tx_index}</p>
@@ -183,6 +204,27 @@ export default function ManualWalletPanel() {
               </div>
             ))}
         </div>
+        {!transactionsLoading && !transactionsError && transactions.length > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 text-[11px] text-secondary">
+            <button
+              className="px-3 py-1 rounded border border-default hover:text-primary disabled:opacity-40"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              Previous
+            </button>
+            <span>
+              Page {page + 1} of {Math.max(1, Math.ceil(transactions.length / pageSize))}
+            </span>
+            <button
+              className="px-3 py-1 rounded border border-default hover:text-primary disabled:opacity-40"
+              disabled={(page + 1) * pageSize >= transactions.length}
+              onClick={() => setPage((p) => ((p + 1) * pageSize >= transactions.length ? p : p + 1))}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

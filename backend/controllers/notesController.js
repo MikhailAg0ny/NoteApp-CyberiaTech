@@ -47,6 +47,8 @@ exports.createNote = async (req, res) => {
     const userId = requireUser(req, res); if (!userId) return;
     const { title, content, notebook_id, tags, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
+    const hasChain = Boolean(tx_hash || tx_status || cardano_address || chain_action || chain_label || chain_metadata);
+    const resolvedTxStatus = hasChain ? (tx_status || 'pending') : null;
     const note = await noteModel.createNote(
       userId,
       notebook_id,
@@ -55,7 +57,7 @@ exports.createNote = async (req, res) => {
       Array.isArray(tags) ? tags : [],
       {
         tx_hash: tx_hash || null,
-        tx_status: tx_status || 'pending',
+        tx_status: resolvedTxStatus,
         cardano_address: cardano_address || null,
         chain_action: chain_action || 'create',
         chain_label: chain_label || null,
@@ -75,6 +77,8 @@ exports.updateNote = async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const { title, content, notebook_id, tags, tx_hash, tx_status, cardano_address, chain_action, chain_label, chain_metadata } = req.body;
     if (!title || !content) return res.status(400).json({ error: 'title and content required' });
+    const hasChain = Boolean(tx_hash || tx_status || cardano_address || chain_action || chain_label || chain_metadata);
+    const resolvedTxStatus = hasChain ? (tx_status || 'pending') : null;
     const updated = await noteModel.updateNote(
       userId,
       id,
@@ -84,7 +88,7 @@ exports.updateNote = async (req, res) => {
       Array.isArray(tags) ? tags : undefined,
       {
         tx_hash: tx_hash || null,
-        tx_status: tx_status || 'pending',
+        tx_status: resolvedTxStatus,
         cardano_address: cardano_address || null,
         chain_action: chain_action || 'update',
         chain_label: chain_label || null,

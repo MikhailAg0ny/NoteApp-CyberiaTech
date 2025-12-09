@@ -65,6 +65,7 @@ type SubmitAdaArgs = {
 type SubmitNoteArgs = {
   action: string;
   noteContent: string;
+  noteTitle?: string;
   targetAddress?: string;
   lovelaceAmount?: bigint;
   label?: bigint;
@@ -139,6 +140,7 @@ interface WalletContextValue {
   transactions: AddressTransaction[];
   transactionsLoading: boolean;
   transactionsError: string | null;
+  txKinds: Record<string, "payment" | "metadata">;
   connectWallet: (walletKey?: string) => Promise<void>;
   disconnectWallet: () => void;
   unlinkWallet: () => Promise<void>;
@@ -152,7 +154,7 @@ interface WalletContextValue {
     txHash: string;
     cardanoAddress: string;
     label: number;
-    metadata: { action: string; note: string; created_at: string };
+    metadata: { action: string; note: string; title?: string; created_at: string };
   }>;
   relaySignedTransaction: (cbor: string) => Promise<RelaySignedTxResult>;
   refreshBalance: (customAddress?: string) => Promise<void>;
@@ -208,6 +210,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<AddressTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [txKinds, setTxKinds] = useState<Record<string, "payment" | "metadata">>({});
   const cardanoWasmRef = useRef<CardanoSerializationLib | null>(null);
   const walletApiRef = useRef<Cip30WalletApi | null>(null);
   const addressRef = useRef<string | null>(null);
@@ -389,7 +392,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ address: targetAddress, count: 10 }),
+        body: JSON.stringify({ address: targetAddress, count: 50 }),
       });
       if (!res.ok) {
         throw new Error(`History fetch failed (${res.status})`);
@@ -709,6 +712,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           .complete();
         const signedTx = await blaze.signTransaction(tx);
         const txHash = await blaze.provider.postTransactionToChain(signedTx);
+        if (txHash) {
+          setTxKinds((prev) => ({ ...prev, [txHash]: "payment" }));
+        }
         return {
           txHash: `${txHash ?? ""}`,
         };
@@ -722,7 +728,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const submitNoteTransaction = useCallback(
-    async ({ action, noteContent, targetAddress, lovelaceAmount, label }: SubmitNoteArgs) => {
+    async ({ action, noteContent, noteTitle, targetAddress, lovelaceAmount, label }: SubmitNoteArgs) => {
       if (!ENABLE_WALLET) {
         throw new Error("Wallet features are disabled");
       }
@@ -759,6 +765,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const mdMap = new Core.MetadatumMap();
         mdMap.insert(Core.Metadatum.newText("action"), Core.Metadatum.newText(action));
         mdMap.insert(Core.Metadatum.newText("note"), formatContent(noteContent || ""));
+        if (noteTitle) {
+          mdMap.insert(Core.Metadatum.newText("title"), Core.Metadatum.newText(noteTitle));
+        }
         const createdAt = new Date().toISOString();
         mdMap.insert(Core.Metadatum.newText("created_at"), Core.Metadatum.newText(createdAt));
         const metadatum = Core.Metadatum.newMap(mdMap);
@@ -776,11 +785,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         const signedTx = await blaze.signTransaction(tx);
         const txHash = await blaze.provider.postTransactionToChain(signedTx);
+        if (txHash) {
+          setTxKinds((prev) => ({ ...prev, [txHash]: "metadata" }));
+        }
         return {
           txHash: `${txHash ?? ""}`,
           cardanoAddress: senderAddress,
           label: Number(chosenLabel),
-          metadata: { action, note: noteContent, created_at: createdAt },
+          metadata: { action, note: noteContent, title: noteTitle, created_at: createdAt },
         };
       } catch (err) {
         const message = getErrorMessage(err, "Failed to submit note transaction");
@@ -847,6 +859,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       relaySignedTransaction,
       refreshBalance,
       loadTransactions,
+      txKinds,
       browserMnemonic,
       browserAddress,
       clearBrowserMnemonic,
@@ -870,6 +883,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       lovelace,
       refreshBalance,
       loadTransactions,
+      txKinds,
       connectWallet,
       disconnectWallet,
       unlinkWallet,

@@ -271,7 +271,7 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const maybeSubmitNoteTx = async (action: string, noteContent: string) => {
+  const maybeSubmitNoteTx = async (action: string, noteContent: string, noteTitle?: string) => {
     if (!walletEnabled) return null;
     const api = getWalletApi?.();
     if (!api || !connectedWallet) return null;
@@ -279,6 +279,7 @@ export default function Page() {
       const result = await submitNoteTransaction({
         action,
         noteContent,
+        noteTitle,
         targetAddress: walletAddress || undefined,
       });
       return {
@@ -382,7 +383,7 @@ export default function Page() {
     }
     try {
       setError(null);
-      const txMeta = sendMetadata ? await maybeSubmitNoteTx("create", newContent) : null;
+      const txMeta = sendMetadata ? await maybeSubmitNoteTx("create", newContent, newTitle) : null;
       const res = await fetch(`${API_BASE}/api/notes`, {
         method: "POST",
         headers: {
@@ -435,7 +436,7 @@ export default function Page() {
     try {
       setError(null);
       const txMeta = payload.sendMetadata
-        ? await maybeSubmitNoteTx("update", payload.content)
+        ? await maybeSubmitNoteTx("update", payload.content, payload.title)
         : null;
       const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
         method: "PUT",
@@ -646,7 +647,12 @@ export default function Page() {
   };
 
   const getStatusBadge = (status?: string | null) => {
-    if (!status) return null;
+    if (!status) {
+      return {
+        label: "Not sending",
+        className: "bg-surface border border-default text-secondary",
+      };
+    }
     const normalized = status.toLowerCase();
     if (normalized === "confirmed") {
       return {

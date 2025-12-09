@@ -162,7 +162,7 @@ exports.createNote = async (userId, notebookId, title, content, tagNames, txMeta
   await detectSchema();
   const {
     tx_hash = null,
-    tx_status = 'pending',
+    tx_status = null,
     cardano_address = null,
     chain_action = null,
     chain_label = null,
